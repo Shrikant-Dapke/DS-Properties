@@ -1,0 +1,11 @@
+@import '@fontsource/dm-sans';
+@import '@fontsource/dm-serif-display';
+@import '@fontsource/space-mono';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-chalk text-navy font-sans antialiased;
+}
