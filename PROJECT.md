@@ -937,9 +937,9 @@ Plots:                 COMPLETE
 Payments:              COMPLETE
 Categories:            COMPLETE
 Income:                COMPLETE
-Expenses:              NOT STARTED
-Reports:               NOT STARTED
-Dashboard:             NOT STARTED
+Expenses:              COMPLETE
+Reports:               COMPLETE
+Dashboard:             COMPLETE
 UI implementation:     COMPLETE
 ```
 

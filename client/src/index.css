@@ -9,3 +9,23 @@
 body {
   @apply bg-chalk text-navy font-sans antialiased;
 }
+
+@media print {
+  header {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .no-print,
+  button {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+  }
+  table {
+    font-size: 10px;
+  }
+}

@@ -22,6 +22,7 @@ import RecordIncomePage from './pages/RecordIncomePage.jsx';
 import IncomeDetailPage from './pages/IncomeDetailPage.jsx';
 import IncomeEditPage from './pages/IncomeEditPage.jsx';
 import CategoryPage from './pages/CategoryPage.jsx';
+import ReportsPage from './pages/ReportsPage.jsx';
 import { RequireAuth } from './routes/RequireAuth.jsx';
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/income/:id" element={<IncomeDetailPage />} />
         <Route path="/income/:id/edit" element={<IncomeEditPage />} />
         <Route path="/categories" element={<CategoryPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
