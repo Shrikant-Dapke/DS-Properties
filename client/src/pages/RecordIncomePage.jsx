@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as categoryService from '../services/category.service.js';
 import * as incomeService from '../services/income.service.js';
-
-const labelClass = 'block font-mono text-xs uppercase tracking-wider text-navy/50';
-const inputClass =
-  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none';
+import Field, { inputClass } from '../components/Field.jsx';
+import Button from '../components/Button.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 
 export default function RecordIncomePage() {
   const navigate = useNavigate();
@@ -17,8 +17,9 @@ export default function RecordIncomePage() {
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [amountError, setAmountError] = useState('');
   const [loadingCats, setLoadingCats] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Only active income categories are selectable. Expense categories are never shown.
@@ -31,8 +32,12 @@ export default function RecordIncomePage() {
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (!amount || Number(amount) <= 0) {
+      setAmountError('Enter an amount greater than zero.');
+      return;
+    }
+    setAmountError('');
     setSubmitting(true);
-    setError('');
     incomeService
       .createIncome({
         categoryId,
@@ -42,10 +47,13 @@ export default function RecordIncomePage() {
         reference: reference.trim(),
         notes: notes.trim(),
       })
-      .then((income) => navigate(`/income/${income._id}`))
+      .then((income) => {
+        toast.success('Income recorded successfully.');
+        navigate(`/income/${income._id}`);
+      })
       .catch((err) => {
-        setError(err.response?.data?.message || 'Failed to record income.');
         setSubmitting(false);
+        toast.error(getErrorMessage(err, 'Failed to record income.'));
       });
   }
 
@@ -60,17 +68,8 @@ export default function RecordIncomePage() {
         installments are recorded as payments, not here.
       </p>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="amount">
-            Amount (₹) *
-          </label>
+        <Field label="Amount (₹)" htmlFor="amount" required error={amountError}>
           <input
             id="amount"
             type="number"
@@ -78,15 +77,15 @@ export default function RecordIncomePage() {
             min="0"
             className={inputClass}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (amountError) setAmountError('');
+            }}
             required
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="date">
-            Date *
-          </label>
+        <Field label="Date" htmlFor="date" required>
           <input
             id="date"
             type="date"
@@ -95,12 +94,14 @@ export default function RecordIncomePage() {
             onChange={(e) => setDate(e.target.value)}
             required
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="categoryId">
-            Category *
-          </label>
+        <Field
+          label="Category"
+          htmlFor="categoryId"
+          required
+          hint="Only active income categories are shown. Expense categories are not allowed."
+        >
           <select
             id="categoryId"
             className={inputClass}
@@ -116,15 +117,9 @@ export default function RecordIncomePage() {
               </option>
             ))}
           </select>
-          <p className="mt-1 font-sans text-xs text-navy/50">
-            Only active income categories are shown. Expense categories are not allowed.
-          </p>
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="description">
-            Description
-          </label>
+        <Field label="Description" htmlFor="description">
           <input
             id="description"
             className={inputClass}
@@ -132,12 +127,9 @@ export default function RecordIncomePage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="e.g. Resale profit from plot 12"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="reference">
-            Reference
-          </label>
+        <Field label="Reference" htmlFor="reference">
           <input
             id="reference"
             className={inputClass}
@@ -145,12 +137,9 @@ export default function RecordIncomePage() {
             onChange={(e) => setReference(e.target.value)}
             placeholder="e.g. RCT-001"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="notes">
-            Notes
-          </label>
+        <Field label="Notes" htmlFor="notes">
           <textarea
             id="notes"
             rows={3}
@@ -158,7 +147,7 @@ export default function RecordIncomePage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-        </div>
+        </Field>
 
         <div className="flex justify-end gap-3 pt-2">
           <Link
@@ -167,13 +156,9 @@ export default function RecordIncomePage() {
           >
             Cancel
           </Link>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-60"
-          >
+          <Button type="submit" loading={submitting}>
             {submitting ? 'Saving…' : 'Record Income'}
-          </button>
+          </Button>
         </div>
       </form>
     </section>

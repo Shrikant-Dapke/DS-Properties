@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as incomeService from '../services/income.service.js';
 import * as categoryService from '../services/category.service.js';
-
-function formatAmount(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN')}`;
-}
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 export default function IncomeListPage() {
   const navigate = useNavigate();
@@ -28,7 +28,13 @@ export default function IncomeListPage() {
   }, []);
 
   useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, dateFrom, dateTo, page]);
+
+  async function load() {
     setLoading(true);
+    setError('');
     const params = { page, limit: 20 };
     if (category) params.category = category;
     if (dateFrom) params.dateFrom = dateFrom;
@@ -39,9 +45,9 @@ export default function IncomeListPage() {
         setIncome(r.items);
         setPagination(r.pagination);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load income.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load income.')))
       .finally(() => setLoading(false));
-  }, [category, dateFrom, dateTo, page]);
+  }
 
   return (
     <section>
@@ -91,16 +97,25 @@ export default function IncomeListPage() {
         />
       </div>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       {loading ? (
-        <p className="mt-6 font-mono text-sm text-navy/50">Loading…</p>
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : error ? (
+        <ErrorState title="Unable to load income." message={error} onRetry={load} />
       ) : income.length === 0 ? (
-        <p className="mt-6 font-sans text-navy/60">No income records found.</p>
+        category || dateFrom || dateTo ? (
+          <EmptyState title="No income matches your filters" description="Try adjusting the filters above." />
+        ) : (
+          <EmptyState
+            title="No income recorded"
+            description="Record your first income entry to track non-sale earnings."
+            actionLabel="Record Income"
+            onAction={() => navigate('/income/new')}
+          />
+        )
       ) : (
         <>
           <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
@@ -129,9 +144,9 @@ export default function IncomeListPage() {
                       {i.categoryId?.name || '—'}
                     </td>
                     <td className="px-4 py-3 font-sans text-navy/80">{i.description || '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-sm text-mint">
-                      {formatAmount(i.amount)}
-                    </td>
+                     <td className="px-4 py-3 text-right font-mono text-sm text-mint">
+                       {formatCurrency(i.amount)}
+                     </td>
                     <td className="px-4 py-3 font-sans text-navy/70">{i.reference || '—'}</td>
                     <td className="px-4 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
                       <div className="flex justify-end gap-3 font-sans text-sm">

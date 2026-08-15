@@ -3,6 +3,12 @@ import * as reportService from '../services/report.service.js';
 import * as customerService from '../services/customer.service.js';
 import * as plotService from '../services/plot.service.js';
 import * as categoryService from '../services/category.service.js';
+import Card from '../components/Card.jsx';
+import Button from '../components/Button.jsx';
+import Spinner from '../components/Spinner.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency, formatDate } from '../utils/format.js';
 
 const REPORT_TYPES = [
   { value: 'customers', label: 'Customer Report' },
@@ -24,16 +30,6 @@ const DATE_PRESETS = [
 
 const PLOT_STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
-
-function formatINR(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function fmtDate(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-IN');
-}
 
 function startOfDay(d) {
   const x = new Date(d);
@@ -126,29 +122,29 @@ function cellText(col, row) {
   const v = row[col.key];
   if (col.money) {
     if (v === null || v === undefined || v === '') return '—';
-    return formatINR(v);
+    return formatCurrency(v);
   }
-  if (col.key === 'date') return fmtDate(v);
+  if (col.key === 'date') return formatDate(v);
   return v === null || v === undefined ? '—' : String(v);
 }
 
 function SummaryCards({ report }) {
   const s = report.summary;
   const card = (label, value, cls = 'text-navy') => (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
+    <Card className="p-4">
       <p className="font-mono text-xs uppercase tracking-wider text-navy/50">{label}</p>
       <p className={`mt-2 font-mono text-xl ${cls}`}>{value}</p>
-    </div>
+    </Card>
   );
   if (report.reportType === 'financial') {
     const op = Number(s.operatingIncomeResult || 0);
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        {card('Customer Payments Received', formatINR(s.customerPaymentsReceived), 'text-mint')}
-        {card('Other Income', formatINR(s.otherIncome), 'text-mint')}
-        {card('Expenses', formatINR(s.expenses), 'text-orange')}
-        {card('Operating Income Result', formatINR(s.operatingIncomeResult), op >= 0 ? 'text-mint' : 'text-orange')}
-        {card('Outstanding Receivables', formatINR(s.outstandingReceivables), 'text-orange')}
+        {card('Customer Payments Received', formatCurrency(s.customerPaymentsReceived), 'text-mint')}
+        {card('Other Income', formatCurrency(s.otherIncome), 'text-mint')}
+        {card('Expenses', formatCurrency(s.expenses), 'text-orange')}
+        {card('Operating Income Result', formatCurrency(s.operatingIncomeResult), op >= 0 ? 'text-mint' : 'text-orange')}
+        {card('Outstanding Receivables', formatCurrency(s.outstandingReceivables), 'text-orange')}
       </div>
     );
   }
@@ -156,9 +152,9 @@ function SummaryCards({ report }) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {card('Customers', s.customers)}
-        {card('Total Agreement Value', formatINR(s.agreementValue))}
-        {card('Total Payments Received', formatINR(s.paymentReceived), 'text-mint')}
-        {card('Total Outstanding', formatINR(s.outstanding), 'text-orange')}
+        {card('Total Agreement Value', formatCurrency(s.agreementValue))}
+        {card('Total Payments Received', formatCurrency(s.paymentReceived), 'text-mint')}
+        {card('Total Outstanding', formatCurrency(s.outstanding), 'text-orange')}
       </div>
     );
   }
@@ -166,20 +162,20 @@ function SummaryCards({ report }) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {card('Plots', s.plots)}
-        {card('Total Agreement Value', formatINR(s.agreementValue))}
-        {card('Total Paid', formatINR(s.totalPaid), 'text-mint')}
-        {card('Total Outstanding', formatINR(s.totalOutstanding), 'text-orange')}
+        {card('Total Agreement Value', formatCurrency(s.agreementValue))}
+        {card('Total Paid', formatCurrency(s.totalPaid), 'text-mint')}
+        {card('Total Outstanding', formatCurrency(s.totalOutstanding), 'text-orange')}
       </div>
     );
   }
   if (report.reportType === 'payments') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Payments Received', formatINR(s.totalPayments), 'text-mint')}</div>;
+    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Payments Received', formatCurrency(s.totalPayments), 'text-mint')}</div>;
   }
   if (report.reportType === 'expenses') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Expenses', formatINR(s.totalExpenses), 'text-orange')}</div>;
+    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Expenses', formatCurrency(s.totalExpenses), 'text-orange')}</div>;
   }
   if (report.reportType === 'income') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Other Income', formatINR(s.totalOtherIncome), 'text-mint')}</div>;
+    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Other Income', formatCurrency(s.totalOtherIncome), 'text-mint')}</div>;
   }
   return null;
 }
@@ -209,7 +205,9 @@ export default function ReportsPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
+  const { toast } = useToast();
 
   useEffect(() => {
     customerService.listCustomers({ limit: 200 }).then((r) => setCustomers(r.items || [])).catch(() => {});
@@ -266,8 +264,11 @@ export default function ReportsPage() {
     if (targetPage > 1) p.page = targetPage;
     reportService
       .generateReport(reportType, p)
-      .then((r) => setResult(r))
-      .catch((err) => setError(err.response?.data?.message || 'Failed to generate report.'))
+      .then((r) => {
+        setResult(r);
+        toast.success('Report generated successfully.');
+      })
+      .catch((err) => setError(getErrorMessage(err, 'Failed to generate report.')))
       .finally(() => setLoading(false));
   }
 
@@ -276,10 +277,15 @@ export default function ReportsPage() {
   }
 
   async function handleDownload(format) {
+    if (exporting) return;
+    setExporting(true);
     try {
       await reportService.downloadReport(reportType, buildParams(), format);
+      toast.success(`Exported ${format.toUpperCase()} report.`);
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to export ${format}.`);
+      toast.error(getErrorMessage(err, `Failed to export ${format}.`));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -438,13 +444,9 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-60"
-          >
-            {loading ? 'Generating…' : 'Generate Report'}
-          </button>
+          <Button onClick={handleGenerate} loading={loading}>
+            Generate Report
+          </Button>
         </div>
 
         {error && (
@@ -465,16 +467,16 @@ export default function ReportsPage() {
               </p>
             </div>
             <div className="flex gap-2 print:hidden">
-              <button onClick={() => handleDownload('pdf')} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5">
+              <button onClick={() => handleDownload('pdf')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
                 Download PDF
               </button>
-              <button onClick={() => handleDownload('excel')} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5">
+              <button onClick={() => handleDownload('excel')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
                 Download Excel
               </button>
-              <button onClick={() => handleDownload('csv')} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5">
+              <button onClick={() => handleDownload('csv')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
                 Download CSV
               </button>
-              <button onClick={() => window.print()} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5">
+              <button onClick={() => window.print()} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
                 Print
               </button>
             </div>
@@ -548,9 +550,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {loading && (
-        <p className="mt-6 font-mono text-sm text-navy/50">Generating report…</p>
-      )}
+      {loading && <Spinner size="sm" className="mt-6" />}
     </section>
   );
 }

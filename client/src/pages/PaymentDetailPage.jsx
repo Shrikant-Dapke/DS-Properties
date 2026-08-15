@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as paymentService from '../services/payment.service.js';
+import Spinner from '../components/Spinner.jsx';
+import { formatCurrency } from '../utils/format.js';
 
 export default function PaymentDetailPage() {
   const { id } = useParams();
@@ -17,14 +19,14 @@ export default function PaymentDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
     return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
 
   const rows = [
     ['Customer', payment.customerId ? payment.customerId.name : '—'],
     ['Plot', payment.plotId ? payment.plotId.plotNumber : '—'],
-    ['Amount', payment.amount],
+    ['Amount', formatCurrency(payment.amount)],
     ['Date', payment.date ? new Date(payment.date).toLocaleDateString() : '—'],
     ['Method', payment.method],
     ['Reference', payment.reference || '—'],

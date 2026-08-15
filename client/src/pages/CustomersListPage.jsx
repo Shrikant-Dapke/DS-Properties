@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import * as customerService from '../services/customer.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import Skeleton from '../components/Skeleton.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 
 export default function CustomersListPage() {
   const [items, setItems] = useState([]);
@@ -12,6 +17,7 @@ export default function CustomersListPage() {
   const [page, setPage] = useState(1);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   async function load() {
     setLoading(true);
@@ -21,7 +27,7 @@ export default function CustomersListPage() {
       setItems(data.items);
       setPagination(data.pagination);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load customers.');
+      setError(getErrorMessage(err, 'Failed to load customers.'));
     } finally {
       setLoading(false);
     }
@@ -37,11 +43,12 @@ export default function CustomersListPage() {
     try {
       await customerService.deleteCustomer(pendingDelete._id);
       setPendingDelete(null);
+      toast.success('Customer deleted successfully.');
       load();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete customer.');
-    } finally {
+      setPendingDelete(null);
       setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete customer.'));
     }
   }
 
@@ -70,16 +77,25 @@ export default function CustomersListPage() {
         />
       </div>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>
-      )}
-
       {loading ? (
-        <p className="mt-8 font-mono text-sm text-navy/50">Loading…</p>
-      ) : items.length === 0 ? (
-        <div className="mt-8 rounded border border-dashed border-navy/20 p-8 text-center font-sans text-navy/50">
-          No customers found.
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
         </div>
+      ) : error ? (
+        <ErrorState
+          title="Unable to load customers."
+          message={error}
+          onRetry={load}
+        />
+      ) : items.length === 0 ? (
+        <EmptyState
+          title="No customers yet"
+          description="Add your first customer to start managing plots and payments."
+          actionLabel="New Customer"
+          onAction={() => navigate('/customers/new')}
+        />
       ) : (
         <div className="mt-4 overflow-x-auto rounded border border-navy/10 bg-white">
           <table className="w-full text-left text-sm">

@@ -1,12 +1,17 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import Spinner from '../components/Spinner.jsx';
 
 export function RequireAuth({ children }) {
   const { user, token, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
   }
 
   if (!token || !user) {

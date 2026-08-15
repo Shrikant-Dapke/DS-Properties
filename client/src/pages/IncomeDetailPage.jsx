@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import * as incomeService from '../services/income.service.js';
-
-function formatAmount(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN')}`;
-}
+import Spinner from '../components/Spinner.jsx';
+import { formatCurrency } from '../utils/format.js';
 
 export default function IncomeDetailPage() {
   const { id } = useParams();
@@ -21,14 +18,14 @@ export default function IncomeDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
     return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
   if (!income) return null;
 
   const rows = [
     ['Category', income.categoryId ? income.categoryId.name : '—'],
-    ['Amount', formatAmount(income.amount)],
+    ['Amount', formatCurrency(income.amount)],
     ['Date', income.date ? new Date(income.date).toLocaleDateString() : '—'],
     ['Description', income.description || '—'],
     ['Reference', income.reference || '—'],

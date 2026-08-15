@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import CustomerForm from '../components/CustomerForm.jsx';
+import Card from '../components/Card.jsx';
+import Spinner from '../components/Spinner.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 import * as customerService from '../services/customer.service.js';
 
 export default function CustomerEditPage() {
@@ -10,7 +14,7 @@ export default function CustomerEditPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
     customerService
@@ -22,26 +26,26 @@ export default function CustomerEditPage() {
 
   async function handleSubmit(payload) {
     setSubmitting(true);
-    setError('');
     try {
       await customerService.updateCustomer(id, payload);
+      toast.success('Customer updated successfully.');
       navigate(`/customers/${id}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update customer.');
       setSubmitting(false);
+      toast.error(getErrorMessage(err, 'Failed to update customer.'));
     }
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (loadError)
     return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{loadError}</div>;
 
   return (
     <section className="max-w-xl">
       <h1 className="font-display text-3xl text-navy">Edit Customer</h1>
-      <div className="mt-6 rounded-lg bg-white p-6 shadow-sm">
-        <CustomerForm initialValues={initial} onSubmit={handleSubmit} submitting={submitting} error={error} />
-      </div>
+      <Card className="mt-6 p-6">
+        <CustomerForm initialValues={initial} onSubmit={handleSubmit} submitting={submitting} />
+      </Card>
     </section>
   );
 }

@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as expenseService from '../services/expense.service.js';
 import * as categoryService from '../services/category.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
-
-function formatAmount(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN')}`;
-}
+import Badge from '../components/Badge.jsx';
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 export default function ExpensesListPage() {
   const navigate = useNavigate();
@@ -24,6 +26,7 @@ export default function ExpensesListPage() {
 
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     categoryService
@@ -33,7 +36,13 @@ export default function ExpensesListPage() {
   }, []);
 
   useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, dateFrom, dateTo, showDeleted, page]);
+
+  async function load() {
     setLoading(true);
+    setError('');
     const params = { page, limit: 20 };
     if (category) params.category = category;
     if (dateFrom) params.dateFrom = dateFrom;
@@ -45,25 +54,24 @@ export default function ExpensesListPage() {
         setExpenses(r.items);
         setPagination(r.pagination);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load expenses.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load expenses.')))
       .finally(() => setLoading(false));
-  }, [category, dateFrom, dateTo, showDeleted, page]);
+  }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    setError('');
     try {
       await expenseService.deleteExpense(pendingDelete._id);
       setExpenses((prev) =>
         prev.map((e) => (e._id === pendingDelete._id ? { ...e, deleted: true } : e))
       );
       setPendingDelete(null);
+      toast.success('Expense soft-deleted.');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete expense.');
       setPendingDelete(null);
-    } finally {
       setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete expense.'));
     }
   }
 
@@ -127,16 +135,25 @@ export default function ExpensesListPage() {
         </label>
       </div>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       {loading ? (
-        <p className="mt-6 font-mono text-sm text-navy/50">Loading…</p>
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : error ? (
+        <ErrorState title="Unable to load expenses." message={error} onRetry={load} />
       ) : expenses.length === 0 ? (
-        <p className="mt-6 font-sans text-navy/60">No expenses found.</p>
+        category || dateFrom || dateTo ? (
+          <EmptyState title="No expenses match your filters" description="Try adjusting the filters above." />
+        ) : (
+          <EmptyState
+            title="No expenses recorded"
+            description="Record your first expense to start tracking spending."
+            actionLabel="Record Expense"
+            onAction={() => navigate('/expenses/new')}
+          />
+        )
       ) : (
         <>
           <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
@@ -166,16 +183,12 @@ export default function ExpensesListPage() {
                     <td className="px-4 py-3 font-sans text-navy">
                       <span className="inline-flex items-center gap-2">
                         {e.categoryId?.name || '—'}
-                        {e.deleted && (
-                          <span className="rounded bg-orange/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-orange">
-                            Deleted
-                          </span>
-                        )}
+                        {e.deleted && <Badge color="orange">Deleted</Badge>}
                       </span>
                     </td>
                     <td className="px-4 py-3 font-sans text-navy/80">{e.description || '—'}</td>
                     <td className="px-4 py-3 text-right font-mono text-sm text-mint">
-                      {formatAmount(e.amount)}
+                      {formatCurrency(e.amount)}
                     </td>
                     <td className="px-4 py-3 font-sans text-navy/70">{e.reference || '—'}</td>
                     <td className="px-4 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>

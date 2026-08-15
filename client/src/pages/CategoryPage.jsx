@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import * as categoryService from '../services/category.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Badge from '../components/Badge.jsx';
+import Card from '../components/Card.jsx';
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 
 const typeBadge = {
-  expense: 'bg-indigo/10 text-indigo',
-  income: 'bg-mint/15 text-mint',
+  expense: 'indigo',
+  income: 'mint',
 };
 
 const emptyForm = { name: '', type: 'expense', notes: '', active: true };
@@ -13,9 +20,9 @@ export default function CategoryPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [type, setType] = useState('');
   const [active, setActive] = useState('');
+  const { toast } = useToast();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -27,13 +34,14 @@ export default function CategoryPage() {
 
   function load() {
     setLoading(true);
+    setError('');
     const params = {};
     if (type) params.type = type;
     if (active) params.active = active;
     categoryService
       .listCategories(params)
       .then((r) => setItems(r.items))
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load categories.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load categories.')))
       .finally(() => setLoading(false));
   }
 
@@ -42,8 +50,6 @@ export default function CategoryPage() {
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
-    setError('');
-    setNotice('');
     setShowForm(true);
   }
 
@@ -55,8 +61,6 @@ export default function CategoryPage() {
       notes: cat.notes || '',
       active: cat.active,
     });
-    setError('');
-    setNotice('');
     setShowForm(true);
   }
 
@@ -69,7 +73,6 @@ export default function CategoryPage() {
   async function submitForm(e) {
     e.preventDefault();
     setSaving(true);
-    setError('');
     const payload = {
       name: form.name.trim(),
       type: form.type,
@@ -80,43 +83,40 @@ export default function CategoryPage() {
       if (editing) {
         const updated = await categoryService.updateCategory(editing, payload);
         setItems((prev) => prev.map((c) => (c._id === editing ? updated : c)));
-        setNotice('Category updated.');
+        toast.success('Category updated.');
       } else {
         const created = await categoryService.createCategory(payload);
         setItems((prev) => [...prev, created]);
-        setNotice('Category created.');
+        toast.success('Category created.');
       }
       cancelForm();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save category.');
-    } finally {
       setSaving(false);
+      toast.error(getErrorMessage(err, 'Failed to save category.'));
     }
   }
 
   async function toggleActive(cat) {
-    setError('');
     try {
       const updated = await categoryService.updateCategory(cat._id, { active: !cat.active });
       setItems((prev) => prev.map((c) => (c._id === cat._id ? updated : c)));
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update category.');
+      toast.error(getErrorMessage(err, 'Failed to update category.'));
     }
   }
 
   async function confirmDelete() {
     setDeleting(true);
-    setError('');
     try {
+      const name = pendingDelete.name;
       await categoryService.deleteCategory(pendingDelete._id);
       setItems((prev) => prev.filter((c) => c._id !== pendingDelete._id));
-      setNotice(`Category "${pendingDelete.name}" deleted.`);
       setPendingDelete(null);
+      toast.success(`Category "${name}" deleted.`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete category.');
       setPendingDelete(null);
-    } finally {
       setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete category.'));
     }
   }
 
@@ -157,21 +157,10 @@ export default function CategoryPage() {
         </div>
       )}
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div className="mt-4 rounded border border-mint bg-mint/10 px-3 py-2 text-sm text-mint">
-          {notice}
-        </div>
-      )}
-
       {showForm && (
+        <Card className="mt-4 p-6">
         <form
           onSubmit={submitForm}
-          className="mt-4 rounded-lg bg-white p-6 shadow-sm"
         >
           <h2 className="font-display text-xl text-navy">
             {editing ? 'Edit Category' : 'New Category'}
@@ -234,15 +223,26 @@ export default function CategoryPage() {
             </button>
           </div>
         </form>
+        </Card>
       )}
 
       {!showForm && (
         <>
-          {loading ? (
-            <p className="mt-6 font-mono text-sm text-navy/50">Loading…</p>
-          ) : items.length === 0 ? (
-            <p className="mt-6 font-sans text-navy/60">No categories found.</p>
-          ) : (
+      {loading ? (
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : error ? (
+        <ErrorState title="Unable to load categories." message={error} onRetry={load} />
+      ) : items.length === 0 ? (
+        type || active ? (
+          <EmptyState title="No categories match your filters" description="Try clearing the filters above." />
+        ) : (
+          <EmptyState title="No categories yet" description="Create a category to organize transactions." actionLabel="New Category" onAction={openCreate} />
+        )
+      ) : (
             <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
               <table className="w-full text-left">
                 <thead>
@@ -259,27 +259,15 @@ export default function CategoryPage() {
                     <tr key={c._id} className="border-b border-navy/5 hover:bg-navy/5">
                       <td className="px-4 py-3 font-sans font-medium text-navy">
                         {c.name}
-                        {c.isSeed && (
-                          <span className="ml-2 rounded bg-lavender/15 px-2 py-0.5 font-sans text-xs text-lavender">
-                            Seed
-                          </span>
-                        )}
+                        {c.isSeed && <Badge color="lavender" className="ml-2">Seed</Badge>}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`rounded px-2 py-1 font-sans text-xs ${
-                            typeBadge[c.type] || 'bg-navy/5 text-navy'
-                          }`}
-                        >
-                          {c.type}
-                        </span>
+                        <Badge color={typeBadge[c.type] || 'navy'}>{c.type}</Badge>
                       </td>
                       <td className="px-4 py-3 font-sans text-navy/70">
-                        {c.active ? (
-                          <span className="text-mint">Active</span>
-                        ) : (
-                          <span className="text-orange">Inactive</span>
-                        )}
+                        <Badge color={c.active ? 'mint' : 'orange'}>
+                          {c.active ? 'Active' : 'Inactive'}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3 font-sans text-navy/70">{c.notes || '—'}</td>
                       <td className="px-4 py-3 text-right">

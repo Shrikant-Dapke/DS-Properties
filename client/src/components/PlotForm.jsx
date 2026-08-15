@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
+import Field, { inputClass } from '../components/Field.jsx';
+import Button from '../components/Button.jsx';
 
 const STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
-
-const labelClass = 'block font-mono text-xs uppercase tracking-wider text-navy/50';
-const inputClass =
-  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none';
 
 export default function PlotForm({ initialValues, customers, onSubmit, submitting, error }) {
   const [form, setForm] = useState({
@@ -52,10 +50,7 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
         </div>
       )}
 
-      <div>
-        <label className={labelClass} htmlFor="plotNumber">
-          Plot Number *
-        </label>
+      <Field label="Plot Number" htmlFor="plotNumber" required>
         <input
           id="plotNumber"
           className={inputClass}
@@ -63,13 +58,10 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
           onChange={(e) => set('plotNumber', e.target.value)}
           required
         />
-      </div>
+      </Field>
 
       <div className="flex gap-4">
-        <div className="flex-1">
-          <label className={labelClass} htmlFor="area">
-            Area
-          </label>
+        <Field label="Area" htmlFor="area" className="flex-1">
           <input
             id="area"
             type="number"
@@ -77,11 +69,8 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             value={form.area}
             onChange={(e) => set('area', e.target.value)}
           />
-        </div>
-        <div className="flex-1">
-          <label className={labelClass} htmlFor="areaUnit">
-            Area Unit
-          </label>
+        </Field>
+        <Field label="Area Unit" htmlFor="areaUnit" className="flex-1">
           <input
             id="areaUnit"
             className={inputClass}
@@ -89,26 +78,20 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             value={form.areaUnit}
             onChange={(e) => set('areaUnit', e.target.value)}
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label className={labelClass} htmlFor="location">
-          Location
-        </label>
+      <Field label="Location" htmlFor="location">
         <input
           id="location"
           className={inputClass}
           value={form.location}
           onChange={(e) => set('location', e.target.value)}
         />
-      </div>
+      </Field>
 
       <div className="flex gap-4">
-        <div className="flex-1">
-          <label className={labelClass} htmlFor="price">
-            Price *
-          </label>
+        <Field label="Price" htmlFor="price" required className="flex-1">
           <input
             id="price"
             type="number"
@@ -118,11 +101,8 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             onChange={(e) => set('price', e.target.value)}
             required
           />
-        </div>
-        <div className="flex-1">
-          <label className={labelClass} htmlFor="agreementAmount">
-            Agreement Amount
-          </label>
+        </Field>
+        <Field label="Agreement Amount" htmlFor="agreementAmount" className="flex-1">
           <input
             id="agreementAmount"
             type="number"
@@ -131,13 +111,10 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             value={form.agreementAmount}
             onChange={(e) => set('agreementAmount', e.target.value)}
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label className={labelClass} htmlFor="status">
-          Status
-        </label>
+      <Field label="Status" htmlFor="status">
         <select
           id="status"
           className={inputClass}
@@ -150,12 +127,9 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div>
-        <label className={labelClass} htmlFor="customerId">
-          Customer
-        </label>
+      <Field label="Customer" htmlFor="customerId">
         <select
           id="customerId"
           className={inputClass}
@@ -169,12 +143,9 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div>
-        <label className={labelClass} htmlFor="notes">
-          Notes
-        </label>
+      <Field label="Notes" htmlFor="notes">
         <textarea
           id="notes"
           rows={3}
@@ -182,15 +153,11 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
           value={form.notes}
           onChange={(e) => set('notes', e.target.value)}
         />
-      </div>
+      </Field>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-50"
-      >
+      <Button type="submit" loading={submitting}>
         {submitting ? 'Saving…' : 'Save'}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -3,15 +3,19 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as plotService from '../services/plot.service.js';
 import * as customerService from '../services/customer.service.js';
 import PlotForm from '../components/PlotForm.jsx';
+import Spinner from '../components/Spinner.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 
 export default function PlotEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [initialValues, setInitialValues] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -23,25 +27,25 @@ export default function PlotEditPage() {
         setInitialValues({ ...rest, customerId: customerId?._id || '' });
         setCustomers(r.items);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load plot.'))
+      .catch((err) => setLoadError(err.response?.data?.message || 'Failed to load plot.'))
       .finally(() => setLoading(false));
   }, [id]);
 
   async function handleSubmit(payload) {
     setSubmitting(true);
-    setError('');
     try {
       await plotService.updatePlot(id, payload);
+      toast.success('Plot updated successfully.');
       navigate(`/plots/${id}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update plot.');
       setSubmitting(false);
+      toast.error(getErrorMessage(err, 'Failed to update plot.'));
     }
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
-  if (error && !initialValues)
-    return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
+  if (loadError)
+    return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{loadError}</div>;
 
   return (
     <section className="max-w-xl">
@@ -56,7 +60,6 @@ export default function PlotEditPage() {
             customers={customers}
             onSubmit={handleSubmit}
             submitting={submitting}
-            error={error}
           />
         </div>
       )}

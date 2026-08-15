@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as expenseService from '../services/expense.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
-
-function formatAmount(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN')}`;
-}
+import Badge from '../components/Badge.jsx';
+import Button from '../components/Button.jsx';
+import Spinner from '../components/Spinner.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 export default function ExpenseDetailPage() {
   const { id } = useParams();
@@ -16,38 +18,45 @@ export default function ExpenseDetailPage() {
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    expenseService
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    await expenseService
       .getExpense(id, { includeDeleted: true })
       .then(setExpense)
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load expense.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load expense.')))
       .finally(() => setLoading(false));
-  }, [id]);
+  }
 
   async function confirmDelete() {
     setDeleting(true);
-    setError('');
     try {
       await expenseService.deleteExpense(id);
       setExpense((prev) => (prev ? { ...prev, deleted: true } : prev));
       setPendingDelete(false);
+      toast.success('Expense soft-deleted.');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete expense.');
       setPendingDelete(false);
-    } finally {
       setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete expense.'));
     }
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
-    return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
+    return <ErrorState title="Unable to load expense." message={error} onRetry={load} />;
   if (!expense) return null;
 
   const rows = [
     ['Category', expense.categoryId ? expense.categoryId.name : '—'],
-    ['Amount', formatAmount(expense.amount)],
+    ['Amount', formatCurrency(expense.amount)],
     ['Date', expense.date ? new Date(expense.date).toLocaleDateString() : '—'],
     ['Description', expense.description || '—'],
     ['Reference', expense.reference || '—'],
@@ -64,11 +73,7 @@ export default function ExpenseDetailPage() {
       </Link>
       <div className="mt-2 flex items-center justify-between">
         <h1 className="font-display text-3xl text-navy">Expense</h1>
-        {expense.deleted && (
-          <span className="rounded bg-orange/15 px-2 py-1 font-mono text-xs uppercase tracking-wider text-orange">
-            Deleted
-          </span>
-        )}
+        {expense.deleted && <Badge color="orange">Deleted</Badge>}
       </div>
 
       <div className="mt-6 rounded-lg bg-white p-6 shadow-sm">
@@ -94,12 +99,9 @@ export default function ExpenseDetailPage() {
           </Link>
         )}
         {!expense.deleted && (
-          <button
-            onClick={() => setPendingDelete(true)}
-            className="rounded bg-orange px-4 py-2 font-sans font-medium text-white hover:bg-orange/90"
-          >
+          <Button variant="danger" onClick={() => setPendingDelete(true)}>
             Delete
-          </button>
+          </Button>
         )}
       </div>
 

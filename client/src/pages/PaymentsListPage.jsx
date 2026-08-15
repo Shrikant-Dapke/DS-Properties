@@ -3,6 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as paymentService from '../services/payment.service.js';
 import * as customerService from '../services/customer.service.js';
 import * as plotService from '../services/plot.service.js';
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
 
@@ -27,7 +32,13 @@ export default function PaymentsListPage() {
   }, []);
 
   useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer, plot, method, dateFrom, dateTo, page]);
+
+  async function load() {
     setLoading(true);
+    setError('');
     const params = { page, limit: 20 };
     if (customer) params.customer = customer;
     if (plot) params.plot = plot;
@@ -40,9 +51,9 @@ export default function PaymentsListPage() {
         setPayments(r.items);
         setPagination(r.pagination);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load payments.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load payments.')))
       .finally(() => setLoading(false));
-  }, [customer, plot, method, dateFrom, dateTo, page]);
+  }
 
   return (
     <section>
@@ -122,16 +133,25 @@ export default function PaymentsListPage() {
         />
       </div>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       {loading ? (
-        <p className="mt-6 font-mono text-sm text-navy/50">Loading…</p>
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : error ? (
+        <ErrorState title="Unable to load payments." message={error} onRetry={load} />
       ) : payments.length === 0 ? (
-        <p className="mt-6 font-sans text-navy/60">No payments found.</p>
+        customer || plot || method || dateFrom || dateTo ? (
+          <EmptyState title="No payments match your filters" description="Try adjusting the filters above." />
+        ) : (
+          <EmptyState
+            title="No payments recorded"
+            description="Record your first payment to start tracking collections."
+            actionLabel="Record Payment"
+            onAction={() => navigate('/payments/new')}
+          />
+        )
       ) : (
         <>
           <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
@@ -162,7 +182,7 @@ export default function PaymentsListPage() {
                     <td className="px-4 py-3 font-sans text-navy">
                       {p.plotId?.plotNumber || '—'}
                     </td>
-                    <td className="px-4 py-3 font-mono text-sm text-mint">{p.amount}</td>
+                     <td className="px-4 py-3 font-mono text-sm text-mint">{formatCurrency(p.amount)}</td>
                     <td className="px-4 py-3 font-sans text-navy/70">{p.method}</td>
                     <td className="px-4 py-3 font-sans text-navy/70">{p.reference || '—'}</td>
                   </tr>

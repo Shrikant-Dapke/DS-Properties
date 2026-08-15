@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as categoryService from '../services/category.service.js';
 import * as incomeService from '../services/income.service.js';
-
-const labelClass = 'block font-mono text-xs uppercase tracking-wider text-navy/50';
-const inputClass =
-  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none';
+import Field, { inputClass } from '../components/Field.jsx';
+import Button from '../components/Button.jsx';
+import Spinner from '../components/Spinner.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 
 export default function IncomeEditPage() {
   const { id } = useParams();
@@ -20,34 +22,49 @@ export default function IncomeEditPage() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [amountError, setAmountError] = useState('');
   const [error, setError] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
-    Promise.all([
-      categoryService.listCategories({ type: 'income', active: 'true' }),
-      incomeService.getIncome(id),
-    ])
-      .then(([catRes, income]) => {
-        const active = catRes.items;
-        // Preserve the current category in the list even if it later became inactive.
-        const current = income.categoryId;
-        const exists = current && active.some((c) => c._id === current._id);
-        setCategories(exists ? active : current ? [current, ...active] : active);
-        setCategoryId(current ? current._id : '');
-        setAmount(income.amount != null ? String(income.amount) : '');
-        setDate(income.date ? income.date.slice(0, 10) : '');
-        setDescription(income.description || '');
-        setReference(income.reference || '');
-        setNotes(income.notes || '');
-      })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load income.'))
-      .finally(() => setLoading(false));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    try {
+      const [catRes, income] = await Promise.all([
+        categoryService.listCategories({ type: 'income', active: 'true' }),
+        incomeService.getIncome(id),
+      ]);
+      const active = catRes.items;
+      // Preserve the current category in the list even if it later became inactive.
+      const current = income.categoryId;
+      const exists = current && active.some((c) => c._id === current._id);
+      setCategories(exists ? active : current ? [current, ...active] : active);
+      setCategoryId(current ? current._id : '');
+      setAmount(income.amount != null ? String(income.amount) : '');
+      setDate(income.date ? income.date.slice(0, 10) : '');
+      setDescription(income.description || '');
+      setReference(income.reference || '');
+      setNotes(income.notes || '');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load income.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (!amount || Number(amount) <= 0) {
+      setAmountError('Enter an amount greater than zero.');
+      return;
+    }
+    setAmountError('');
     setSubmitting(true);
-    setError('');
     incomeService
       .updateIncome(id, {
         categoryId,
@@ -57,14 +74,18 @@ export default function IncomeEditPage() {
         reference: reference.trim(),
         notes: notes.trim(),
       })
-      .then((income) => navigate(`/income/${income._id}`))
+      .then((income) => {
+        toast.success('Income updated successfully.');
+        navigate(`/income/${income._id}`);
+      })
       .catch((err) => {
-        setError(err.response?.data?.message || 'Failed to update income.');
         setSubmitting(false);
+        toast.error(getErrorMessage(err, 'Failed to update income.'));
       });
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
+  if (error) return <ErrorState title="Unable to load income." message={error} onRetry={load} />;
 
   return (
     <section className="max-w-xl">
@@ -73,17 +94,8 @@ export default function IncomeEditPage() {
       </Link>
       <h1 className="mt-2 font-display text-3xl text-navy">Edit Income</h1>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <div>
-          <label className={labelClass} htmlFor="amount">
-            Amount (₹) *
-          </label>
+        <Field label="Amount (₹)" htmlFor="amount" required error={amountError}>
           <input
             id="amount"
             type="number"
@@ -91,15 +103,15 @@ export default function IncomeEditPage() {
             min="0"
             className={inputClass}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (amountError) setAmountError('');
+            }}
             required
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="date">
-            Date *
-          </label>
+        <Field label="Date" htmlFor="date" required>
           <input
             id="date"
             type="date"
@@ -108,12 +120,14 @@ export default function IncomeEditPage() {
             onChange={(e) => setDate(e.target.value)}
             required
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="categoryId">
-            Category *
-          </label>
+        <Field
+          label="Category"
+          htmlFor="categoryId"
+          required
+          hint="Only active income categories are shown. Expense categories are not allowed."
+        >
           <select
             id="categoryId"
             className={inputClass}
@@ -128,39 +142,27 @@ export default function IncomeEditPage() {
               </option>
             ))}
           </select>
-          <p className="mt-1 font-sans text-xs text-navy/50">
-            Only active income categories are shown. Expense categories are not allowed.
-          </p>
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="description">
-            Description
-          </label>
+        <Field label="Description" htmlFor="description">
           <input
             id="description"
             className={inputClass}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="reference">
-            Reference
-          </label>
+        <Field label="Reference" htmlFor="reference">
           <input
             id="reference"
             className={inputClass}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="notes">
-            Notes
-          </label>
+        <Field label="Notes" htmlFor="notes">
           <textarea
             id="notes"
             rows={3}
@@ -168,7 +170,7 @@ export default function IncomeEditPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-        </div>
+        </Field>
 
         <div className="flex justify-end gap-3 pt-2">
           <Link
@@ -177,13 +179,9 @@ export default function IncomeEditPage() {
           >
             Cancel
           </Link>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-60"
-          >
+          <Button type="submit" loading={submitting}>
             {submitting ? 'Saving…' : 'Save Changes'}
-          </button>
+          </Button>
         </div>
       </form>
     </section>

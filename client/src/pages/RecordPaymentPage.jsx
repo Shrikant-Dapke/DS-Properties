@@ -3,15 +3,19 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as customerService from '../services/customer.service.js';
 import * as plotService from '../services/plot.service.js';
 import * as paymentService from '../services/payment.service.js';
+import Field, { inputClass } from '../components/Field.jsx';
+import Button from '../components/Button.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
 const labelClass = 'block font-mono text-xs uppercase tracking-wider text-navy/50';
-const inputClass =
-  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none';
 
 export default function RecordPaymentPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [customers, setCustomers] = useState([]);
   const [plots, setPlots] = useState([]);
   const [customerId, setCustomerId] = useState(params.get('customer') || '');
@@ -24,7 +28,9 @@ export default function RecordPaymentPage() {
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [amountError, setAmountError] = useState('');
+  const [plotError, setPlotError] = useState('');
+  const [plotsLoading, setPlotsLoading] = useState(false);
   const [loadingPlot, setLoadingPlot] = useState(false);
 
   useEffect(() => {
@@ -38,14 +44,17 @@ export default function RecordPaymentPage() {
     setPlotId('');
     setPlotDetail(null);
     setPaymentsForPlot([]);
+    setPlotError('');
     if (!customerId) {
       setPlots([]);
       return;
     }
+    setPlotsLoading(true);
     plotService
       .listPlots({ customer: customerId, limit: 200 })
       .then((r) => setPlots(r.items))
-      .catch(() => setPlots([]));
+      .catch(() => setPlots([]))
+      .finally(() => setPlotsLoading(false));
   }, [customerId]);
 
   useEffect(() => {
@@ -84,16 +93,37 @@ export default function RecordPaymentPage() {
     plotDetail.agreementAmount !== null &&
     plotDetail.agreementAmount !== undefined;
 
+  function validate() {
+    if (!plotId) {
+      setPlotError('Please select a plot.');
+      return false;
+    }
+    setPlotError('');
+    if (!amount || Number(amount) <= 0) {
+      setAmountError('Enter an amount greater than zero.');
+      return false;
+    }
+    if (remaining !== null && Number(amount) > remaining) {
+      setAmountError('Payment cannot exceed the remaining balance.');
+      return false;
+    }
+    setAmountError('');
+    return true;
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
+    if (!validate()) return;
     setSubmitting(true);
-    setError('');
     paymentService
       .createPayment({ customerId, plotId, amount: amount || 0, date, method, reference, notes })
-      .then((p) => navigate(`/payments/${p._id}`))
+      .then((p) => {
+        toast.success('Payment recorded successfully.');
+        navigate(`/payments/${p._id}`);
+      })
       .catch((err) => {
-        setError(err.response?.data?.message || 'Failed to record payment.');
         setSubmitting(false);
+        toast.error(getErrorMessage(err, 'Failed to record payment.'));
       });
   }
 
@@ -104,13 +134,7 @@ export default function RecordPaymentPage() {
       </Link>
       <h1 className="mt-2 font-display text-3xl text-navy">Record Payment</h1>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
         <div>
           <label className={labelClass} htmlFor="customerId">
             Customer
@@ -131,26 +155,39 @@ export default function RecordPaymentPage() {
           </select>
         </div>
 
-        <div>
-          <label className={labelClass} htmlFor="plotId">
-            Plot
-          </label>
+        <Field label="Plot" htmlFor="plotId" required error={plotError}>
           <select
             id="plotId"
             className={inputClass}
             value={plotId}
-            onChange={(e) => setPlotId(e.target.value)}
+            onChange={(e) => {
+              setPlotId(e.target.value);
+              if (plotError) setPlotError('');
+            }}
             required
-            disabled={!customerId}
+            disabled={!customerId || plotsLoading || plots.length === 0}
           >
-            <option value="">{customerId ? 'Select plot…' : 'Select a customer first'}</option>
+            <option value="">
+              {!customerId
+                ? 'Select a customer first'
+                : plotsLoading
+                ? 'Loading plots…'
+                : 'Select plot…'}
+            </option>
             {plots.map((p) => (
               <option key={p._id} value={p._id}>
                 {p.plotNumber}
               </option>
             ))}
           </select>
-        </div>
+        </Field>
+
+        {customerId && !plotsLoading && plots.length === 0 && (
+          <p className="font-sans text-sm text-navy/60">
+            No plots available for this customer. Add a plot for this customer first, then record the
+            payment.
+          </p>
+        )}
 
         {loadingPlot && <p className="font-mono text-sm text-navy/50">Loading plot…</p>}
 
@@ -160,16 +197,16 @@ export default function RecordPaymentPage() {
             <dl className="mt-2 space-y-1 font-mono text-sm text-navy">
               <div className="flex justify-between">
                 <dt>Agreement Amount</dt>
-                <dd>{agreement !== null ? agreement : '—'}</dd>
+                <dd>{agreement !== null ? formatCurrency(agreement) : '—'}</dd>
               </div>
               <div className="flex justify-between">
                 <dt>Paid So Far</dt>
-                <dd>{paid}</dd>
+                <dd>{formatCurrency(paid)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt>Remaining</dt>
                 <dd className={remaining !== null && remaining > 0 ? 'text-mint' : 'text-orange'}>
-                  {remaining !== null ? remaining : '—'}
+                  {remaining !== null ? formatCurrency(remaining) : '—'}
                 </dd>
               </div>
             </dl>
@@ -181,25 +218,27 @@ export default function RecordPaymentPage() {
           </div>
         )}
 
-        <div>
-          <label className={labelClass} htmlFor="amount">
-            Amount *
-          </label>
+        <Field label="Amount" htmlFor="amount" required error={amountError}>
           <input
             id="amount"
             type="number"
             step="any"
             className={inputClass}
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (amountError) setAmountError('');
+            }}
             required
           />
-        </div>
+        </Field>
 
         {resulting !== null && (
           <p className="font-mono text-sm text-navy/70">
             Resulting remaining:{' '}
-            <span className={resulting >= 0 ? 'text-mint' : 'text-orange'}>{resulting}</span>
+            <span className={resulting >= 0 ? 'text-mint' : 'text-orange'}>
+              {resulting !== null ? formatCurrency(resulting) : '—'}
+            </span>
           </p>
         )}
 
@@ -260,13 +299,9 @@ export default function RecordPaymentPage() {
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={submitting || !canRecord}
-          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-50"
-        >
+        <Button type="submit" loading={submitting}>
           {submitting ? 'Recording…' : 'Record Payment'}
-        </button>
+        </Button>
       </form>
     </section>
   );

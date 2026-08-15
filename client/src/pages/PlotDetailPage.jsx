@@ -3,12 +3,19 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as plotService from '../services/plot.service.js';
 import * as paymentService from '../services/payment.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Badge from '../components/Badge.jsx';
+import Button from '../components/Button.jsx';
+import Spinner from '../components/Spinner.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 const statusBadge = {
-  Available: 'bg-navy/5 text-navy',
-  Reserved: 'bg-lavender/15 text-lavender',
-  Allocated: 'bg-indigo/10 text-indigo',
-  Sold: 'bg-mint/15 text-mint',
+  Available: 'navy',
+  Reserved: 'lavender',
+  Allocated: 'indigo',
+  Sold: 'mint',
 };
 
 export default function PlotDetailPage() {
@@ -21,14 +28,22 @@ export default function PlotDetailPage() {
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    plotService
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    await plotService
       .getPlot(id)
       .then(setPlot)
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load plot.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load plot.')))
       .finally(() => setLoading(false));
-  }, [id]);
+  }
 
   useEffect(() => {
     paymentService
@@ -42,17 +57,18 @@ export default function PlotDetailPage() {
     setDeleting(true);
     try {
       await plotService.deletePlot(id);
+      toast.success('Plot deleted successfully.');
       navigate('/plots');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete plot.');
-      setDeleting(false);
       setPendingDelete(false);
+      setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete plot.'));
     }
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
-    return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
+    return <ErrorState title="Unable to load plot." message={error} onRetry={load} />;
 
   const rows = [
     ['Plot Number', plot.plotNumber],
@@ -79,12 +95,8 @@ export default function PlotDetailPage() {
       <div className="mt-2 flex items-start justify-between">
         <div>
           <h1 className="font-display text-3xl text-navy">{plot.plotNumber}</h1>
-          <span
-            className={`mt-2 inline-block rounded px-2 py-1 font-sans text-xs ${
-              statusBadge[plot.status] || 'bg-navy/5 text-navy'
-            }`}
-          >
-            {plot.status}
+          <span className="mt-2 inline-block">
+            <Badge color={statusBadge[plot.status] || 'navy'}>{plot.status}</Badge>
           </span>
         </div>
         <div className="flex gap-3">
@@ -100,12 +112,9 @@ export default function PlotDetailPage() {
           >
             Record Payment
           </Link>
-          <button
-            onClick={() => setPendingDelete(true)}
-            className="rounded bg-orange px-4 py-2 font-sans font-medium text-white hover:bg-orange/90"
-          >
+          <Button variant="danger" onClick={() => setPendingDelete(true)}>
             Delete
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -137,7 +146,7 @@ export default function PlotDetailPage() {
 
       <h2 className="mt-8 font-display text-2xl text-navy">Payment Summary</h2>
       {paymentsLoading ? (
-        <p className="mt-2 font-mono text-sm text-navy/50">Loading…</p>
+        <Spinner size="sm" className="mt-2" />
       ) : (
         <>
           <div className="mt-3 flex flex-wrap gap-6">
@@ -145,22 +154,24 @@ export default function PlotDetailPage() {
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Agreement Amount</p>
               <p className="font-mono text-lg text-navy">
                 {plot.agreementAmount !== null && plot.agreementAmount !== undefined
-                  ? plot.agreementAmount
+                  ? formatCurrency(plot.agreementAmount)
                   : '—'}
               </p>
             </div>
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Total Paid</p>
               <p className="font-mono text-lg text-mint">
-                {payments.reduce((s, p) => s + Number(p.amount || 0), 0)}
+                {formatCurrency(payments.reduce((s, p) => s + Number(p.amount || 0), 0))}
               </p>
             </div>
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Outstanding</p>
               <p className="font-mono text-lg text-orange">
                 {plot.agreementAmount !== null && plot.agreementAmount !== undefined
-                  ? Number(plot.agreementAmount) -
-                    payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+                  ? formatCurrency(
+                      Number(plot.agreementAmount) -
+                        payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+                    )
                   : '—'}
               </p>
             </div>
@@ -196,7 +207,7 @@ export default function PlotDetailPage() {
                       <td className="px-4 py-3 font-mono text-sm text-navy">
                         {p.date ? new Date(p.date).toLocaleDateString() : '—'}
                       </td>
-                      <td className="px-4 py-3 font-mono text-sm text-mint">{p.amount}</td>
+                       <td className="px-4 py-3 font-mono text-sm text-mint">{formatCurrency(p.amount)}</td>
                       <td className="px-4 py-3 font-sans text-navy/70">{p.method}</td>
                       <td className="px-4 py-3 font-sans text-navy/70">{p.reference || '—'}</td>
                     </tr>

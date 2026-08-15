@@ -3,14 +3,21 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as plotService from '../services/plot.service.js';
 import * as customerService from '../services/customer.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Badge from '../components/Badge.jsx';
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 const STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
 
 const statusBadge = {
-  Available: 'bg-navy/5 text-navy',
-  Reserved: 'bg-lavender/15 text-lavender',
-  Allocated: 'bg-indigo/10 text-indigo',
-  Sold: 'bg-mint/15 text-mint',
+  Available: 'navy',
+  Reserved: 'lavender',
+  Allocated: 'indigo',
+  Sold: 'mint',
 };
 
 export default function PlotsListPage() {
@@ -26,6 +33,7 @@ export default function PlotsListPage() {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     customerService
@@ -35,6 +43,11 @@ export default function PlotsListPage() {
   }, []);
 
   useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, status, customer, page]);
+
+  async function load() {
     setLoading(true);
     const params = { page, limit: 20 };
     if (search.trim()) params.search = search.trim();
@@ -46,20 +59,21 @@ export default function PlotsListPage() {
         setPlots(r.items);
         setPagination(r.pagination);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load plots.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load plots.')))
       .finally(() => setLoading(false));
-  }, [search, status, customer, page]);
+  }
 
   async function confirmDelete() {
     setDeleting(true);
     try {
       await plotService.deletePlot(pendingDelete._id);
       setPlots((prev) => prev.filter((p) => p._id !== pendingDelete._id));
-      setPendingDelete(false);
+      setPendingDelete(null);
+      toast.success('Plot deleted successfully.');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete plot.');
-    } finally {
+      setPendingDelete(null);
       setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete plot.'));
     }
   }
 
@@ -117,16 +131,25 @@ export default function PlotsListPage() {
         </select>
       </div>
 
-      {error && (
-        <div className="mt-4 rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">
-          {error}
-        </div>
-      )}
-
       {loading ? (
-        <p className="mt-6 font-mono text-sm text-navy/50">Loading…</p>
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : error ? (
+        <ErrorState title="Unable to load plots." message={error} onRetry={load} />
       ) : plots.length === 0 ? (
-        <p className="mt-6 font-sans text-navy/60">No plots found.</p>
+        search.trim() || status || customer ? (
+          <EmptyState title="No plots match your filters" description="Try clearing the search or filters." />
+        ) : (
+          <EmptyState
+            title="No plots yet"
+            description="Create your first plot to start tracking sales."
+            actionLabel="New Plot"
+            onAction={() => navigate('/plots/new')}
+          />
+        )
       ) : (
         <>
           <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
@@ -148,20 +171,14 @@ export default function PlotsListPage() {
                     className="cursor-pointer border-b border-navy/5 hover:bg-navy/5"
                   >
                     <td className="px-4 py-3 font-sans font-medium text-navy">{p.plotNumber}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded px-2 py-1 font-sans text-xs ${
-                          statusBadge[p.status] || 'bg-navy/5 text-navy'
-                        }`}
-                      >
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-sans text-navy/70">{p.location || '—'}</td>
-                    <td className="px-4 py-3 font-mono text-sm text-navy">{p.price}</td>
-                    <td className="px-4 py-3 font-sans text-navy/70">
-                      {p.customerId?.name || '—'}
-                    </td>
+                     <td className="px-4 py-3">
+                       <Badge color={statusBadge[p.status] || 'navy'}>{p.status}</Badge>
+                     </td>
+                     <td className="px-4 py-3 font-sans text-navy/70">{p.location || '—'}</td>
+                     <td className="px-4 py-3 font-mono text-sm text-navy">{formatCurrency(p.price)}</td>
+                     <td className="px-4 py-3 font-sans text-navy/70">
+                       {p.customerId?.name || '—'}
+                     </td>
                   </tr>
                 ))}
               </tbody>

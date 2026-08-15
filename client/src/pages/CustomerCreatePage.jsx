@@ -1,31 +1,37 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import CustomerForm from '../components/CustomerForm.jsx';
+import Card from '../components/Card.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
 import * as customerService from '../services/customer.service.js';
 
 export default function CustomerCreatePage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
 
   async function handleSubmit(payload) {
     setSubmitting(true);
-    setError('');
     try {
       const customer = await customerService.createCustomer(payload);
+      toast.success('Customer created successfully.');
       navigate(`/customers/${customer._id}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create customer.');
       setSubmitting(false);
+      toast.error(getErrorMessage(err, 'Failed to create customer.'));
     }
   }
 
   return (
     <section className="max-w-xl">
-      <h1 className="font-display text-3xl text-navy">New Customer</h1>
-      <div className="mt-6 rounded-lg bg-white p-6 shadow-sm">
-        <CustomerForm onSubmit={handleSubmit} submitting={submitting} error={error} />
-      </div>
+      <Link to="/customers" className="font-mono text-xs uppercase tracking-wider text-lavender hover:underline">
+        ← Customers
+      </Link>
+      <h1 className="mt-2 font-display text-3xl text-navy">New Customer</h1>
+      <Card className="mt-6 p-6">
+        <CustomerForm onSubmit={handleSubmit} submitting={submitting} />
+      </Card>
     </section>
   );
 }

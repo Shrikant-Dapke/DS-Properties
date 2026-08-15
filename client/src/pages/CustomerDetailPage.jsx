@@ -4,12 +4,19 @@ import * as customerService from '../services/customer.service.js';
 import * as plotService from '../services/plot.service.js';
 import * as paymentService from '../services/payment.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Badge from '../components/Badge.jsx';
+import Button from '../components/Button.jsx';
+import Spinner from '../components/Spinner.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
 const statusBadge = {
-  Available: 'bg-navy/5 text-navy',
-  Reserved: 'bg-lavender/15 text-lavender',
-  Allocated: 'bg-indigo/10 text-indigo',
-  Sold: 'bg-mint/15 text-mint',
+  Available: 'navy',
+  Reserved: 'lavender',
+  Allocated: 'indigo',
+  Sold: 'mint',
 };
 
 export default function CustomerDetailPage() {
@@ -24,14 +31,22 @@ export default function CustomerDetailPage() {
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    customerService
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    await customerService
       .getCustomer(id)
       .then(setCustomer)
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load customer.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load customer.')))
       .finally(() => setLoading(false));
-  }, [id]);
+  }
 
   useEffect(() => {
     plotService
@@ -53,17 +68,18 @@ export default function CustomerDetailPage() {
     setDeleting(true);
     try {
       await customerService.deleteCustomer(id);
+      toast.success('Customer deleted successfully.');
       navigate('/customers');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete customer.');
-      setDeleting(false);
       setPendingDelete(false);
+      setDeleting(false);
+      toast.error(getErrorMessage(err, 'Failed to delete customer.'));
     }
   }
 
-  if (loading) return <p className="font-mono text-sm text-navy/50">Loading…</p>;
+  if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
-    return <div className="rounded border border-orange bg-orange/10 px-3 py-2 text-sm text-orange">{error}</div>;
+    return <ErrorState title="Unable to load customer." message={error} onRetry={load} />;
 
   const rows = [
     ['Name', customer.name],
@@ -91,12 +107,9 @@ export default function CustomerDetailPage() {
           >
             Record Payment
           </Link>
-          <button
-            onClick={() => setPendingDelete(true)}
-            className="rounded bg-orange px-4 py-2 font-sans font-medium text-white hover:bg-orange/90"
-          >
+          <Button variant="danger" onClick={() => setPendingDelete(true)}>
             Delete
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -114,31 +127,33 @@ export default function CustomerDetailPage() {
 
       <h2 className="mt-8 font-display text-2xl text-navy">Payment History</h2>
       {paymentsLoading ? (
-        <p className="mt-2 font-mono text-sm text-navy/50">Loading…</p>
+        <Spinner size="sm" className="mt-2" />
       ) : (
         <>
           <div className="mt-3 flex flex-wrap gap-6">
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Total Payments Received</p>
               <p className="font-mono text-lg text-mint">
-                {payments.reduce((s, p) => s + Number(p.amount || 0), 0)}
+                {formatCurrency(payments.reduce((s, p) => s + Number(p.amount || 0), 0))}
               </p>
             </div>
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Outstanding Receivables</p>
               <p className="font-mono text-lg text-orange">
-                {(() => {
-                  const paidByPlot = {};
-                  payments.forEach((p) => {
-                    const key = p.plotId?._id || p.plotId;
-                    paidByPlot[key] = (paidByPlot[key] || 0) + Number(p.amount || 0);
-                  });
-                  return plots.reduce((sum, plot) => {
-                    if (plot.agreementAmount === null || plot.agreementAmount === undefined) return sum;
-                    const paid = paidByPlot[plot._id] || 0;
-                    return sum + (Number(plot.agreementAmount) - paid);
-                  }, 0);
-                })()}
+                {formatCurrency(
+                  (() => {
+                    const paidByPlot = {};
+                    payments.forEach((p) => {
+                      const key = p.plotId?._id || p.plotId;
+                      paidByPlot[key] = (paidByPlot[key] || 0) + Number(p.amount || 0);
+                    });
+                    return plots.reduce((sum, plot) => {
+                      if (plot.agreementAmount === null || plot.agreementAmount === undefined) return sum;
+                      const paid = paidByPlot[plot._id] || 0;
+                      return sum + (Number(plot.agreementAmount) - paid);
+                    }, 0);
+                  })()
+                )}
               </p>
             </div>
           </div>
@@ -170,7 +185,7 @@ export default function CustomerDetailPage() {
                       <td className="px-4 py-3 font-sans text-navy">
                         {p.plotId?.plotNumber || '—'}
                       </td>
-                      <td className="px-4 py-3 font-mono text-sm text-mint">{p.amount}</td>
+                      <td className="px-4 py-3 font-mono text-sm text-mint">{formatCurrency(p.amount)}</td>
                       <td className="px-4 py-3 font-sans text-navy/70">{p.method}</td>
                       <td className="px-4 py-3 font-sans text-navy/70">{p.reference || '—'}</td>
                     </tr>
@@ -184,7 +199,7 @@ export default function CustomerDetailPage() {
 
       <h2 className="mt-8 font-display text-2xl text-navy">Associated Plots</h2>
       {plotsLoading ? (
-        <p className="mt-2 font-mono text-sm text-navy/50">Loading…</p>
+        <Spinner size="sm" className="mt-2" />
       ) : plots.length === 0 ? (
         <p className="mt-2 font-sans text-navy/60">No plots assigned to this customer.</p>
       ) : (
@@ -205,13 +220,7 @@ export default function CustomerDetailPage() {
                 >
                   <td className="px-4 py-3 font-sans font-medium text-navy">{p.plotNumber}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded px-2 py-1 font-sans text-xs ${
-                        statusBadge[p.status] || 'bg-navy/5 text-navy'
-                      }`}
-                    >
-                      {p.status}
-                    </span>
+                    <Badge color={statusBadge[p.status] || 'navy'}>{p.status}</Badge>
                   </td>
                 </tr>
               ))}

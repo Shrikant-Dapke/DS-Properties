@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as dashboardService from '../services/dashboard.service.js';
+import Card from '../components/Card.jsx';
+import Skeleton from '../components/Skeleton.jsx';
+import ErrorState from '../components/ErrorState.jsx';
+import { getErrorMessage } from '../utils/errorMessage.js';
+import { formatCurrency } from '../utils/format.js';
 
-function formatINR(value) {
-  const n = Number(value || 0);
-  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function Card({ label, value, valueClass = 'text-navy', sub = '' }) {
+function StatCard({ label, value, valueClass = 'text-navy', sub = '' }) {
   return (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
+    <Card className="p-4">
       <p className="font-mono text-xs uppercase tracking-wider text-navy/50">{label}</p>
       <p className={`mt-2 font-mono text-xl ${valueClass}`}>{value}</p>
       {sub && <p className="mt-1 font-sans text-xs text-navy/50">{sub}</p>}
-    </div>
+    </Card>
   );
 }
 
@@ -21,22 +21,14 @@ function SectionTitle({ children }) {
   return <h2 className="mb-3 mt-8 font-display text-xl text-navy">{children}</h2>;
 }
 
-function StatusBanner({ loading, error }) {
-  if (loading) {
-    return (
-      <div className="rounded border border-navy/10 bg-white px-4 py-3 font-mono text-sm text-navy/50">
-        Loading dashboard…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="rounded border border-orange bg-orange/10 px-4 py-3 text-sm text-orange">
-        {error}
-      </div>
-    );
-  }
-  return null;
+function DashboardSkeleton() {
+  return (
+    <div className="mt-4 space-y-4">
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-24 w-full" />
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -47,8 +39,14 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function load() {
     setLoading(true);
-    Promise.all([
+    setError('');
+    await Promise.all([
       dashboardService.getDashboardSummary(),
       dashboardService.getDashboardTrends(),
       dashboardService.getDashboardRecent({ limit: 5 }),
@@ -58,17 +56,26 @@ export default function DashboardPage() {
         setTrends(t);
         setRecent(r);
       })
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load dashboard.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load dashboard.')))
       .finally(() => setLoading(false));
-  }, []);
+  }
 
-  const banner = <StatusBanner loading={loading} error={error} />;
-
-  if (loading || error) {
+  if (error) {
     return (
       <section>
         <h1 className="font-display text-3xl text-navy">Dashboard</h1>
-        <div className="mt-4">{banner}</div>
+        <div className="mt-4">
+          <ErrorState title="Unable to load dashboard." message={error} onRetry={load} />
+        </div>
+      </section>
+    );
+  }
+
+  if (loading) {
+    return (
+      <section>
+        <h1 className="font-display text-3xl text-navy">Dashboard</h1>
+        <DashboardSkeleton />
       </section>
     );
   }
@@ -100,10 +107,14 @@ export default function DashboardPage() {
       {/* Property overview */}
       <SectionTitle>Property Overview</SectionTitle>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Card label="Total Customers" value={summary.customers.total} />
-        <Card label="Total Plots" value={summary.plots.total} />
-        <Card label="Available Plots" value={summary.plots.available} sub="Unassigned / on market" />
-        <Card label="Sold Plots" value={summary.plots.sold} />
+        <StatCard
+        label="Total Customers" value={summary.customers.total} />
+        <StatCard
+        label="Total Plots" value={summary.plots.total} />
+        <StatCard
+        label="Available Plots" value={summary.plots.available} sub="Unassigned / on market" />
+        <StatCard
+        label="Sold Plots" value={summary.plots.sold} />
       </div>
 
       {/* Receivables */}
@@ -111,13 +122,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <Card
           label="Customer Payments Received"
-          value={formatINR(summary.payments.totalReceived)}
+          value={formatCurrency(summary.payments.totalReceived)}
           valueClass="text-mint"
           sub="Plot installments only"
         />
         <Card
           label="Outstanding Receivables"
-          value={formatINR(summary.receivables.totalOutstanding)}
+          value={formatCurrency(summary.receivables.totalOutstanding)}
           valueClass="text-orange"
           sub="Money still owed by customers"
         />
@@ -131,11 +142,13 @@ export default function DashboardPage() {
       {/* Business finance */}
       <SectionTitle>Business Financial Result</SectionTitle>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <Card label="Other Income" value={formatINR(summary.income.totalOtherIncome)} valueClass="text-mint" sub="Income records only" />
-        <Card label="Expenses" value={formatINR(summary.expenses.totalExpenses)} valueClass="text-orange" sub="Excludes deleted" />
+        <StatCard
+        label="Other Income" value={formatCurrency(summary.income.totalOtherIncome)} valueClass="text-mint" sub="Income records only" />
+        <StatCard
+        label="Expenses" value={formatCurrency(summary.expenses.totalExpenses)} valueClass="text-orange" sub="Excludes deleted" />
         <Card
           label="Operating Income Result"
-          value={formatINR(summary.operatingResult.amount)}
+          value={formatCurrency(summary.operatingResult.amount)}
           valueClass={operating >= 0 ? 'text-mint' : 'text-orange'}
           sub="Other Income − Expenses"
         />
@@ -150,7 +163,7 @@ export default function DashboardPage() {
           items={recent.payments}
           render={(p) => (
             <>
-              <span className="font-mono text-mint">{formatINR(p.amount)}</span>
+              <span className="font-mono text-mint">{formatCurrency(p.amount)}</span>
               <span className="ml-2 font-sans text-navy/60">
                 {p.customerId?.name || '—'} · {p.plotId?.plotNumber || '—'}
               </span>
@@ -164,7 +177,7 @@ export default function DashboardPage() {
           items={recent.income}
           render={(i) => (
             <>
-              <span className="font-mono text-mint">{formatINR(i.amount)}</span>
+              <span className="font-mono text-mint">{formatCurrency(i.amount)}</span>
               <span className="ml-2 font-sans text-navy/60">{i.categoryId?.name || '—'}</span>
             </>
           )}
@@ -176,7 +189,7 @@ export default function DashboardPage() {
           items={recent.expenses}
           render={(e) => (
             <>
-              <span className="font-mono text-orange">{formatINR(e.amount)}</span>
+              <span className="font-mono text-orange">{formatCurrency(e.amount)}</span>
               <span className="ml-2 font-sans text-navy/60">{e.categoryId?.name || '—'}</span>
             </>
           )}
@@ -203,9 +216,9 @@ export default function DashboardPage() {
               {trends.map((t) => (
                 <tr key={t.period} className="border-b border-navy/5">
                   <td className="px-4 py-3 font-mono text-sm text-navy">{t.period}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatINR(t.payments)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatINR(t.income)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-orange">{formatINR(t.expenses)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.payments)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.income)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-sm text-orange">{formatCurrency(t.expenses)}</td>
                 </tr>
               ))}
             </tbody>
