@@ -5,8 +5,12 @@ import * as categoryService from '../services/category.service.js';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
+
+const inputClass =
+  'w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo';
 
 export default function IncomeListPage() {
   const navigate = useNavigate();
@@ -49,52 +53,80 @@ export default function IncomeListPage() {
       .finally(() => setLoading(false));
   }
 
+  const activeCount = (category ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+  const clearFilters = () => {
+    setCategory('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl text-navy">Other Income</h1>
         <Link
           to="/income/new"
-          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90"
+          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white transition-colors duration-150 hover:bg-indigo/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
         >
           Record Income
         </Link>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <select
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
-          }}
-        />
-        <input
-          type="date"
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
-            setPage(1);
-          }}
-        />
+      <div className="mt-4">
+        <FilterPanel activeCount={activeCount} onClear={clearFilters}>
+          <div className="min-w-[170px]">
+            <label htmlFor="inc-category" className="sr-only">
+              Filter by category
+            </label>
+            <select
+              id="inc-category"
+              className={inputClass}
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[150px]">
+            <label htmlFor="inc-from" className="sr-only">
+              From date
+            </label>
+            <input
+              id="inc-from"
+              type="date"
+              className={inputClass}
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="min-w-[150px]">
+            <label htmlFor="inc-to" className="sr-only">
+              To date
+            </label>
+            <input
+              id="inc-to"
+              type="date"
+              className={inputClass}
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+        </FilterPanel>
       </div>
 
       {loading ? (
@@ -118,7 +150,7 @@ export default function IncomeListPage() {
         )
       ) : (
         <>
-          <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
+          <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
@@ -140,20 +172,24 @@ export default function IncomeListPage() {
                     <td className="px-4 py-3 font-mono text-sm text-navy">
                       {i.date ? new Date(i.date).toLocaleDateString() : '—'}
                     </td>
-                    <td className="px-4 py-3 font-sans text-navy">
-                      {i.categoryId?.name || '—'}
-                    </td>
+                    <td className="px-4 py-3 font-sans text-navy">{i.categoryId?.name || '—'}</td>
                     <td className="px-4 py-3 font-sans text-navy/80">{i.description || '—'}</td>
-                     <td className="px-4 py-3 text-right font-mono text-sm text-mint">
-                       {formatCurrency(i.amount)}
-                     </td>
+                    <td className="num px-4 py-3 font-mono text-sm text-mint">
+                      {formatCurrency(i.amount)}
+                    </td>
                     <td className="px-4 py-3 font-sans text-navy/70">{i.reference || '—'}</td>
                     <td className="px-4 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
                       <div className="flex justify-end gap-3 font-sans text-sm">
-                        <Link to={`/income/${i._id}`} className="text-lavender hover:underline">
+                        <Link
+                          to={`/income/${i._id}`}
+                          className="text-lavender hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+                        >
                           View
                         </Link>
-                        <Link to={`/income/${i._id}/edit`} className="text-indigo hover:underline">
+                        <Link
+                          to={`/income/${i._id}/edit`}
+                          className="text-indigo hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+                        >
                           Edit
                         </Link>
                       </div>
@@ -169,7 +205,7 @@ export default function IncomeListPage() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Prev
               </button>
@@ -179,7 +215,7 @@ export default function IncomeListPage() {
               <button
                 disabled={page >= pagination.totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Next
               </button>

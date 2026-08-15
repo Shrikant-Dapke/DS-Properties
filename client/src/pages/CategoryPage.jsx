@@ -6,6 +6,7 @@ import Card from '../components/Card.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 
@@ -15,6 +16,8 @@ const typeBadge = {
 };
 
 const emptyForm = { name: '', type: 'expense', notes: '', active: true };
+const inputClass =
+  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo';
 
 export default function CategoryPage() {
   const [items, setItems] = useState([]);
@@ -120,6 +123,12 @@ export default function CategoryPage() {
     }
   }
 
+  const activeCount = (type ? 1 : 0) + (active ? 1 : 0);
+  const clearFilters = () => {
+    setType('');
+    setActive('');
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between">
@@ -127,7 +136,7 @@ export default function CategoryPage() {
         {!showForm && (
           <button
             onClick={openCreate}
-            className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90"
+            className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white transition-colors duration-150 hover:bg-indigo/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
           >
             New Category
           </button>
@@ -135,170 +144,180 @@ export default function CategoryPage() {
       </div>
 
       {!showForm && (
-        <div className="mt-4 flex flex-wrap gap-3">
-          <select
-            className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
-            <option value="">All types</option>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-          <select
-            className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-            value={active}
-            onChange={(e) => setActive(e.target.value)}
-          >
-            <option value="">All statuses</option>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
+        <div className="mt-4">
+          <FilterPanel activeCount={activeCount} onClear={clearFilters}>
+            <div className="min-w-[160px]">
+              <label htmlFor="cat-type" className="sr-only">
+                Filter by type
+              </label>
+              <select
+                id="cat-type"
+                className="w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                <option value="">All types</option>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div className="min-w-[160px]">
+              <label htmlFor="cat-active" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="cat-active"
+                className="w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo"
+                value={active}
+                onChange={(e) => setActive(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+            </div>
+          </FilterPanel>
         </div>
       )}
 
       {showForm && (
         <Card className="mt-4 p-6">
-        <form
-          onSubmit={submitForm}
-        >
-          <h2 className="font-display text-xl text-navy">
-            {editing ? 'Edit Category' : 'New Category'}
-          </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="font-sans text-sm text-navy/70">Name</span>
-              <input
-                className="mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Category name"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="font-sans text-sm text-navy/70">Type</span>
-              <select
-                className="mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-                value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+          <form onSubmit={submitForm}>
+            <h2 className="font-display text-xl text-navy">
+              {editing ? 'Edit Category' : 'New Category'}
+            </h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="font-sans text-sm text-navy/70">Name</span>
+                <input
+                  className={inputClass}
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Category name"
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="font-sans text-sm text-navy/70">Type</span>
+                <select
+                  className={inputClass}
+                  value={form.type}
+                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="font-sans text-sm text-navy/70">Notes</span>
+                <input
+                  className={inputClass}
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+                  className="h-4 w-4 accent-indigo"
+                />
+                <span className="font-sans text-sm text-navy/70">Active</span>
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelForm}
+                className="rounded border border-navy/20 px-4 py-2 font-sans text-navy transition-colors hover:bg-navy/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-              </select>
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="font-sans text-sm text-navy/70">Notes</span>
-              <input
-                className="mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-                value={form.notes}
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Optional"
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                className="h-4 w-4 accent-indigo"
-              />
-              <span className="font-sans text-sm text-navy/70">Active</span>
-            </label>
-          </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={cancelForm}
-              className="rounded border border-navy/20 px-4 py-2 font-sans text-navy hover:bg-navy/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90 disabled:opacity-60"
-            >
-              {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Category'}
-            </button>
-          </div>
-        </form>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white transition-colors hover:bg-indigo/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+              >
+                {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Category'}
+              </button>
+            </div>
+          </form>
         </Card>
       )}
 
       {!showForm && (
-        <>
-      {loading ? (
-        <div className="mt-4 space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-3/4" />
-        </div>
-      ) : error ? (
-        <ErrorState title="Unable to load categories." message={error} onRetry={load} />
-      ) : items.length === 0 ? (
-        type || active ? (
-          <EmptyState title="No categories match your filters" description="Try clearing the filters above." />
+        loading ? (
+          <div className="mt-4 space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-3/4" />
+          </div>
+        ) : error ? (
+          <ErrorState title="Unable to load categories." message={error} onRetry={load} />
+        ) : items.length === 0 ? (
+          type || active ? (
+            <EmptyState title="No categories match your filters" description="Try clearing the filters above." />
+          ) : (
+            <EmptyState title="No categories yet" description="Create a category to organize transactions." actionLabel="New Category" onAction={openCreate} />
+          )
         ) : (
-          <EmptyState title="No categories yet" description="Create a category to organize transactions." actionLabel="New Category" onAction={openCreate} />
-        )
-      ) : (
-            <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Notes</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+          <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Notes</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((c) => (
+                  <tr key={c._id} className="border-b border-navy/5 hover:bg-navy/5">
+                    <td className="px-4 py-3 font-sans font-medium text-navy">
+                      {c.name}
+                      {c.isSeed && <Badge color="lavender" className="ml-2">Seed</Badge>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color={typeBadge[c.type] || 'navy'}>{c.type}</Badge>
+                    </td>
+                    <td className="px-4 py-3 font-sans text-navy/70">
+                      <Badge color={c.active ? 'mint' : 'orange'}>
+                        {c.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 font-sans text-navy/70">{c.notes || '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => toggleActive(c)}
+                        className="rounded border border-navy/15 px-2 py-1 font-sans text-xs text-navy transition-colors hover:bg-navy/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+                      >
+                        {c.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={() => openEdit(c)}
+                        className="ml-2 rounded border border-navy/15 px-2 py-1 font-sans text-xs text-navy transition-colors hover:bg-navy/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+                      >
+                        Edit
+                      </button>
+                      {!c.isSeed && (
+                        <button
+                          onClick={() => setPendingDelete(c)}
+                          className="ml-2 rounded border border-orange/40 px-2 py-1 font-sans text-xs text-orange transition-colors hover:bg-orange/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((c) => (
-                    <tr key={c._id} className="border-b border-navy/5 hover:bg-navy/5">
-                      <td className="px-4 py-3 font-sans font-medium text-navy">
-                        {c.name}
-                        {c.isSeed && <Badge color="lavender" className="ml-2">Seed</Badge>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge color={typeBadge[c.type] || 'navy'}>{c.type}</Badge>
-                      </td>
-                      <td className="px-4 py-3 font-sans text-navy/70">
-                        <Badge color={c.active ? 'mint' : 'orange'}>
-                          {c.active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 font-sans text-navy/70">{c.notes || '—'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => toggleActive(c)}
-                          className="rounded border border-navy/15 px-2 py-1 font-sans text-xs text-navy hover:bg-navy/5"
-                        >
-                          {c.active ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button
-                          onClick={() => openEdit(c)}
-                          className="ml-2 rounded border border-navy/15 px-2 py-1 font-sans text-xs text-navy hover:bg-navy/5"
-                        >
-                          Edit
-                        </button>
-                        {!c.isSeed && (
-                          <button
-                            onClick={() => setPendingDelete(c)}
-                            className="ml-2 rounded border border-orange/40 px-2 py-1 font-sans text-xs text-orange hover:bg-orange/10"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
 
       <DeleteConfirmModal

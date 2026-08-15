@@ -11,7 +11,7 @@ function StatCard({ label, value, valueClass = 'text-navy', sub = '' }) {
   return (
     <Card className="p-4">
       <p className="font-mono text-xs uppercase tracking-wider text-navy/50">{label}</p>
-      <p className={`mt-2 font-mono text-xl ${valueClass}`}>{value}</p>
+      <p className={`mt-2 font-mono text-xl tabular-nums ${valueClass}`}>{value}</p>
       {sub && <p className="mt-1 font-sans text-xs text-navy/50">{sub}</p>}
     </Card>
   );

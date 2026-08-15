@@ -7,6 +7,7 @@ import Badge from '../components/Badge.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
@@ -19,6 +20,9 @@ const statusBadge = {
   Allocated: 'indigo',
   Sold: 'mint',
 };
+
+const inputClass =
+  'w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo';
 
 export default function PlotsListPage() {
   const navigate = useNavigate();
@@ -77,58 +81,86 @@ export default function PlotsListPage() {
     }
   }
 
+  const activeCount = (search ? 1 : 0) + (status ? 1 : 0) + (customer ? 1 : 0);
+  const clearFilters = () => {
+    setSearch('');
+    setStatus('');
+    setCustomer('');
+    setPage(1);
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl text-navy">Plots</h1>
         <Link
           to="/plots/new"
-          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90"
+          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white transition-colors duration-150 hover:bg-indigo/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
         >
           New Plot
         </Link>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        <input
-          className="flex-1 rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          placeholder="Search plot number…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-        <select
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={customer}
-          onChange={(e) => {
-            setCustomer(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All customers</option>
-          {customers.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+      <div className="mt-4">
+        <FilterPanel activeCount={activeCount} onClear={clearFilters}>
+          <div className="min-w-[180px] flex-1">
+            <label htmlFor="plot-search" className="sr-only">
+              Search plot number
+            </label>
+            <input
+              id="plot-search"
+              className={inputClass}
+              placeholder="Search plot number…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="min-w-[160px]">
+            <label htmlFor="plot-status" className="sr-only">
+              Filter by status
+            </label>
+            <select
+              id="plot-status"
+              className={inputClass}
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[180px]">
+            <label htmlFor="plot-customer" className="sr-only">
+              Filter by customer
+            </label>
+            <select
+              id="plot-customer"
+              className={inputClass}
+              value={customer}
+              onChange={(e) => {
+                setCustomer(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All customers</option>
+              {customers.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </FilterPanel>
       </div>
 
       {loading ? (
@@ -152,14 +184,14 @@ export default function PlotsListPage() {
         )
       ) : (
         <>
-          <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
+          <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
                   <th className="px-4 py-3">Plot #</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Price</th>
+                  <th className="px-4 py-3 text-right">Price</th>
                   <th className="px-4 py-3">Customer</th>
                 </tr>
               </thead>
@@ -171,14 +203,12 @@ export default function PlotsListPage() {
                     className="cursor-pointer border-b border-navy/5 hover:bg-navy/5"
                   >
                     <td className="px-4 py-3 font-sans font-medium text-navy">{p.plotNumber}</td>
-                     <td className="px-4 py-3">
-                       <Badge color={statusBadge[p.status] || 'navy'}>{p.status}</Badge>
-                     </td>
-                     <td className="px-4 py-3 font-sans text-navy/70">{p.location || '—'}</td>
-                     <td className="px-4 py-3 font-mono text-sm text-navy">{formatCurrency(p.price)}</td>
-                     <td className="px-4 py-3 font-sans text-navy/70">
-                       {p.customerId?.name || '—'}
-                     </td>
+                    <td className="px-4 py-3">
+                      <Badge color={statusBadge[p.status] || 'navy'}>{p.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3 font-sans text-navy/70">{p.location || '—'}</td>
+                    <td className="num px-4 py-3 font-mono text-sm text-navy">{formatCurrency(p.price)}</td>
+                    <td className="px-4 py-3 font-sans text-navy/70">{p.customerId?.name || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -190,7 +220,7 @@ export default function PlotsListPage() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Prev
               </button>
@@ -200,7 +230,7 @@ export default function PlotsListPage() {
               <button
                 disabled={page >= pagination.totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Next
               </button>

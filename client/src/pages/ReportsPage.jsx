@@ -6,6 +6,7 @@ import * as categoryService from '../services/category.service.js';
 import Card from '../components/Card.jsx';
 import Button from '../components/Button.jsx';
 import Spinner from '../components/Spinner.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency, formatDate } from '../utils/format.js';
@@ -169,20 +170,32 @@ function SummaryCards({ report }) {
     );
   }
   if (report.reportType === 'payments') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Payments Received', formatCurrency(s.totalPayments), 'text-mint')}</div>;
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        {card('Total Payments Received', formatCurrency(s.totalPayments), 'text-mint')}
+      </div>
+    );
   }
   if (report.reportType === 'expenses') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Expenses', formatCurrency(s.totalExpenses), 'text-orange')}</div>;
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        {card('Total Expenses', formatCurrency(s.totalExpenses), 'text-orange')}
+      </div>
+    );
   }
   if (report.reportType === 'income') {
-    return <div className="grid grid-cols-2 gap-4 md:grid-cols-2">{card('Total Other Income', formatCurrency(s.totalOtherIncome), 'text-mint')}</div>;
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        {card('Total Other Income', formatCurrency(s.totalOtherIncome), 'text-mint')}
+      </div>
+    );
   }
   return null;
 }
 
-const labelClass = 'block font-mono text-xs uppercase tracking-wider text-navy/50';
+const fieldLabel = 'block font-mono text-xs uppercase tracking-wider text-navy/50 mb-1';
 const inputClass =
-  'mt-1 w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none';
+  'w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo';
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState('customers');
@@ -291,162 +304,236 @@ export default function ReportsPage() {
 
   const columns = COLUMN_DEFS[reportType] || [];
 
+  const activeCount = [
+    search.trim(),
+    hasPlots !== 'all',
+    status !== 'All',
+    customer !== 'All',
+    location.trim(),
+    plot !== 'All',
+    method !== 'All',
+    category !== 'All',
+    datePreset !== 'thisMonth',
+    customFrom,
+    customTo,
+  ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setSearch('');
+    setHasPlots('all');
+    setStatus('All');
+    setCustomer('All');
+    setLocation('');
+    setPlot('All');
+    setMethod('All');
+    setCategory('All');
+    setDatePreset('thisMonth');
+    setCustomFrom('');
+    setCustomTo('');
+  };
+
   return (
-    <section className="print-area">
+    <section>
       <div className="print:hidden">
         <h1 className="font-display text-3xl text-navy">Reports</h1>
         <p className="mt-1 font-sans text-sm text-navy/60">
           Generate business reports. Exports and the on-screen report use identical backend calculations.
         </p>
 
-        {/* Report type */}
-        <div className="mt-6 max-w-xl">
-          <label className={labelClass}>Report Type</label>
-          <select className={inputClass} value={reportType} onChange={(e) => setReportType(e.target.value)}>
-            {REPORT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+        {/* Report type selector */}
+        <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Report type">
+          {REPORT_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => {
+                setReportType(t.value);
+                setResult(null);
+                setPage(1);
+              }}
+              aria-pressed={reportType === t.value}
+              className={`rounded-full px-3 py-1.5 font-sans text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2 ${
+                reportType === t.value
+                  ? 'bg-indigo text-white shadow-sm'
+                  : 'bg-white text-navy hover:bg-indigo/10'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Dynamic filters */}
-        <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg bg-white p-4 shadow-sm">
-          {usesDate && (
-            <>
-              <div>
-                <label className={labelClass}>Date Range</label>
-                <select
-                  className={inputClass}
-                  value={datePreset}
-                  onChange={(e) => setDatePreset(e.target.value)}
-                >
-                  {DATE_PRESETS.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {datePreset === 'custom' && (
-                <>
-                  <div>
-                    <label className={labelClass}>From</label>
-                    <input type="date" className={inputClass} value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>To</label>
-                    <input type="date" className={inputClass} value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-                  </div>
-                </>
-              )}
-            </>
-          )}
+        <div className="mt-4">
+          <FilterPanel activeCount={activeCount} onClear={clearFilters}>
+            {usesDate && (
+              <>
+                <div className="min-w-[160px]">
+                  <label htmlFor="rpt-preset" className={fieldLabel}>
+                    Date Range
+                  </label>
+                  <select
+                    id="rpt-preset"
+                    className={inputClass}
+                    value={datePreset}
+                    onChange={(e) => setDatePreset(e.target.value)}
+                  >
+                    {DATE_PRESETS.map((d) => (
+                      <option key={d.value} value={d.value}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {datePreset === 'custom' && (
+                  <>
+                    <div className="min-w-[150px]">
+                      <label htmlFor="rpt-from" className={fieldLabel}>
+                        From
+                      </label>
+                      <input id="rpt-from" type="date" className={inputClass} value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                    </div>
+                    <div className="min-w-[150px]">
+                      <label htmlFor="rpt-to" className={fieldLabel}>
+                        To
+                      </label>
+                      <input id="rpt-to" type="date" className={inputClass} value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
 
-          {reportType === 'customers' && (
-            <>
-              <div>
-                <label className={labelClass}>Search</label>
-                <input className={inputClass} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name / phone / email" />
-              </div>
-              <div>
-                <label className={labelClass}>Has Plots</label>
-                <select className={inputClass} value={hasPlots} onChange={(e) => setHasPlots(e.target.value)}>
-                  <option value="all">All</option>
-                  <option value="with">With plots</option>
-                  <option value="without">Without plots</option>
-                </select>
-              </div>
-            </>
-          )}
+            {reportType === 'customers' && (
+              <>
+                <div className="min-w-[180px] flex-1">
+                  <label htmlFor="rpt-search" className={fieldLabel}>
+                    Search
+                  </label>
+                  <input
+                    id="rpt-search"
+                    className={inputClass}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Name / phone / email"
+                  />
+                </div>
+                <div className="min-w-[160px]">
+                  <label htmlFor="rpt-hasplots" className={fieldLabel}>
+                    Has Plots
+                  </label>
+                  <select id="rpt-hasplots" className={inputClass} value={hasPlots} onChange={(e) => setHasPlots(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="with">With plots</option>
+                    <option value="without">Without plots</option>
+                  </select>
+                </div>
+              </>
+            )}
 
-          {reportType === 'plots' && (
-            <>
-              <div>
-                <label className={labelClass}>Status</label>
-                <select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="All">All</option>
-                  {PLOT_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Customer</label>
-                <select className={inputClass} value={customer} onChange={(e) => setCustomer(e.target.value)}>
-                  <option value="All">All</option>
-                  {customers.map((c) => (
+            {reportType === 'plots' && (
+              <>
+                <div className="min-w-[150px]">
+                  <label htmlFor="rpt-status" className={fieldLabel}>
+                    Status
+                  </label>
+                  <select id="rpt-status" className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <option value="All">All</option>
+                    {PLOT_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[170px]">
+                  <label htmlFor="rpt-customer" className={fieldLabel}>
+                    Customer
+                  </label>
+                  <select id="rpt-customer" className={inputClass} value={customer} onChange={(e) => setCustomer(e.target.value)}>
+                    <option value="All">All</option>
+                    {customers.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[160px] flex-1">
+                  <label htmlFor="rpt-location" className={fieldLabel}>
+                    Location
+                  </label>
+                  <input id="rpt-location" className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location text" />
+                </div>
+              </>
+            )}
+
+            {reportType === 'payments' && (
+              <>
+                <div className="min-w-[170px]">
+                  <label htmlFor="rpt-customer" className={fieldLabel}>
+                    Customer
+                  </label>
+                  <select id="rpt-customer" className={inputClass} value={customer} onChange={(e) => setCustomer(e.target.value)}>
+                    <option value="All">All</option>
+                    {customers.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[160px]">
+                  <label htmlFor="rpt-plot" className={fieldLabel}>
+                    Plot
+                  </label>
+                  <select id="rpt-plot" className={inputClass} value={plot} onChange={(e) => setPlot(e.target.value)}>
+                    <option value="All">All</option>
+                    {plots.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.plotNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[150px]">
+                  <label htmlFor="rpt-method" className={fieldLabel}>
+                    Method
+                  </label>
+                  <select id="rpt-method" className={inputClass} value={method} onChange={(e) => setMethod(e.target.value)}>
+                    <option value="All">All</option>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {(reportType === 'expenses' || reportType === 'income') && (
+              <div className="min-w-[170px]">
+                <label htmlFor="rpt-category" className={fieldLabel}>
+                  Category
+                </label>
+                <select id="rpt-category" className={inputClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="All">All Categories</option>
+                  {categories.map((c) => (
                     <option key={c._id} value={c._id}>
                       {c.name}
                     </option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className={labelClass}>Location</label>
-                <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location text" />
-              </div>
-            </>
-          )}
+            )}
 
-          {reportType === 'payments' && (
-            <>
-              <div>
-                <label className={labelClass}>Customer</label>
-                <select className={inputClass} value={customer} onChange={(e) => setCustomer(e.target.value)}>
-                  <option value="All">All</option>
-                  {customers.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Plot</label>
-                <select className={inputClass} value={plot} onChange={(e) => setPlot(e.target.value)}>
-                  <option value="All">All</option>
-                  {plots.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.plotNumber}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Method</label>
-                <select className={inputClass} value={method} onChange={(e) => setMethod(e.target.value)}>
-                  <option value="All">All</option>
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {(reportType === 'expenses' || reportType === 'income') && (
-            <div>
-              <label className={labelClass}>Category</label>
-              <select className={inputClass} value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="All">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-end">
+              <Button onClick={handleGenerate} loading={loading}>
+                Generate Report
+              </Button>
             </div>
-          )}
-
-          <Button onClick={handleGenerate} loading={loading}>
-            Generate Report
-          </Button>
+          </FilterPanel>
         </div>
 
         {error && (
@@ -454,9 +541,16 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* Result */}
       {result && (
-        <div className="mt-6">
+        <div className="mt-6 print-area">
+          <div className="print-only mb-4 border-b border-navy/15 pb-3">
+            <p className="font-display text-2xl text-navy">DS Properties</p>
+            <p className="font-sans text-sm text-navy/70">
+              {REPORT_TYPES.find((t) => t.value === result.reportType)?.label} · Generated{' '}
+              {new Date(result.generatedAt).toLocaleString()} · Filters: {JSON.stringify(result.filters)}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-display text-2xl text-navy">
@@ -467,16 +561,16 @@ export default function ReportsPage() {
               </p>
             </div>
             <div className="flex gap-2 print:hidden">
-              <button onClick={() => handleDownload('pdf')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
+              <button onClick={() => handleDownload('pdf')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy transition-colors hover:bg-navy/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
                 Download PDF
               </button>
-              <button onClick={() => handleDownload('excel')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
+              <button onClick={() => handleDownload('excel')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy transition-colors hover:bg-navy/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
                 Download Excel
               </button>
-              <button onClick={() => handleDownload('csv')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
+              <button onClick={() => handleDownload('csv')} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy transition-colors hover:bg-navy/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
                 Download CSV
               </button>
-              <button onClick={() => window.print()} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy hover:bg-navy/5 disabled:opacity-50">
+              <button onClick={() => window.print()} disabled={exporting} className="rounded border border-navy/20 px-3 py-1 font-sans text-sm text-navy transition-colors hover:bg-navy/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
                 Print
               </button>
             </div>
@@ -492,9 +586,9 @@ export default function ReportsPage() {
               separate property/customer metrics and are not part of the operating result.
             </p>
           ) : (
-            <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
+            <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
               <table className="w-full text-left">
-                <thead className="sticky top-0 bg-navy text-chalk">
+                <thead className="bg-chalk text-navy/60">
                   <tr className="font-mono text-xs uppercase tracking-wider">
                     {columns.map((c) => (
                       <th key={c.key} className="px-4 py-3">
@@ -514,7 +608,12 @@ export default function ReportsPage() {
                     result.rows.map((row, i) => (
                       <tr key={row._id || i} className="border-b border-navy/5">
                         {columns.map((c) => (
-                          <td key={c.key} className={`px-4 py-3 ${c.money ? 'text-right font-mono text-sm text-mint' : 'font-sans text-navy'}`}>
+                          <td
+                            key={c.key}
+                            className={`px-4 py-3 ${
+                              c.money ? 'num text-right font-mono text-sm text-mint' : 'font-sans text-navy'
+                            }`}
+                          >
                             {cellText(c, row)}
                           </td>
                         ))}
@@ -531,7 +630,7 @@ export default function ReportsPage() {
               <button
                 disabled={result.pagination.page <= 1}
                 onClick={() => doGenerate(result.pagination.page - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Prev
               </button>
@@ -541,7 +640,7 @@ export default function ReportsPage() {
               <button
                 disabled={result.pagination.page >= result.pagination.totalPages}
                 onClick={() => doGenerate(result.pagination.page + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Next
               </button>
@@ -550,7 +649,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {loading && <Spinner size="sm" className="mt-6" />}
+      {loading && <Spinner size="sm" className="mt-6 print:hidden" />}
     </section>
   );
 }

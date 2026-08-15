@@ -7,9 +7,13 @@ import Badge from '../components/Badge.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
+
+const inputClass =
+  'w-full rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy outline-none transition-colors focus:border-indigo focus:ring-1 focus:ring-indigo';
 
 export default function ExpensesListPage() {
   const navigate = useNavigate();
@@ -75,64 +79,92 @@ export default function ExpensesListPage() {
     }
   }
 
+  const activeCount = (category ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+  const clearFilters = () => {
+    setCategory('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl text-navy">Expenses</h1>
         <Link
           to="/expenses/new"
-          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white hover:bg-indigo/90"
+          className="rounded bg-indigo px-4 py-2 font-sans font-medium text-white transition-colors duration-150 hover:bg-indigo/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
         >
           Record Expense
         </Link>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <select
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
-          }}
-        />
-        <input
-          type="date"
-          className="rounded border border-navy/15 bg-white px-3 py-2 font-sans text-navy focus:border-indigo focus:outline-none"
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
-            setPage(1);
-          }}
-        />
-        <label className="flex items-center gap-2 font-sans text-sm text-navy/70">
-          <input
-            type="checkbox"
-            checked={showDeleted}
-            onChange={(e) => {
-              setShowDeleted(e.target.checked);
-              setPage(1);
-            }}
-            className="h-4 w-4 accent-orange"
-          />
-          Show deleted
-        </label>
+      <div className="mt-4">
+        <FilterPanel activeCount={activeCount} onClear={clearFilters}>
+          <div className="min-w-[170px]">
+            <label htmlFor="exp-category" className="sr-only">
+              Filter by category
+            </label>
+            <select
+              id="exp-category"
+              className={inputClass}
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[150px]">
+            <label htmlFor="exp-from" className="sr-only">
+              From date
+            </label>
+            <input
+              id="exp-from"
+              type="date"
+              className={inputClass}
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="min-w-[150px]">
+            <label htmlFor="exp-to" className="sr-only">
+              To date
+            </label>
+            <input
+              id="exp-to"
+              type="date"
+              className={inputClass}
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <label className="flex items-center gap-2 font-sans text-sm text-navy/70">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => {
+                setShowDeleted(e.target.checked);
+                setPage(1);
+              }}
+              className="h-4 w-4 accent-orange"
+            />
+            Show deleted
+          </label>
+        </FilterPanel>
       </div>
 
       {loading ? (
@@ -156,7 +188,7 @@ export default function ExpensesListPage() {
         )
       ) : (
         <>
-          <div className="mt-4 overflow-x-auto rounded-lg bg-white shadow-sm">
+          <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
@@ -187,7 +219,7 @@ export default function ExpensesListPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-sans text-navy/80">{e.description || '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-sm text-mint">
+                    <td className="num px-4 py-3 font-mono text-sm text-mint">
                       {formatCurrency(e.amount)}
                     </td>
                     <td className="px-4 py-3 font-sans text-navy/70">{e.reference || '—'}</td>
@@ -195,20 +227,20 @@ export default function ExpensesListPage() {
                       <div className="flex justify-end gap-3 font-sans text-sm">
                         <Link
                           to={`/expenses/${e._id}`}
-                          className="text-lavender hover:underline"
+                          className="text-lavender hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
                         >
                           View
                         </Link>
                         <Link
                           to={`/expenses/${e._id}/edit`}
-                          className="text-indigo hover:underline"
+                          className="text-indigo hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
                         >
                           Edit
                         </Link>
                         <button
                           onClick={() => setPendingDelete(e)}
                           disabled={e.deleted}
-                          className="text-orange hover:underline disabled:opacity-40"
+                          className="text-orange hover:underline disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
                         >
                           Delete
                         </button>
@@ -225,7 +257,7 @@ export default function ExpensesListPage() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Prev
               </button>
@@ -235,7 +267,7 @@ export default function ExpensesListPage() {
               <button
                 disabled={page >= pagination.totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40"
+                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
               >
                 Next
               </button>

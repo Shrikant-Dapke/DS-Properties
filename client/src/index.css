@@ -6,26 +6,190 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 360ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --radius: 0.75rem;
+}
+
 body {
   @apply bg-chalk text-navy font-sans antialiased;
 }
 
+/* Visible, consistent focus for keyboard users */
+:focus-visible {
+  outline: 2px solid #5b4fe9;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---------- Page / component transition ---------- */
+.page-enter {
+  animation: page-in var(--dur) var(--ease-out) both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Modal ---------- */
+.modal-backdrop {
+  animation: backdrop-in var(--dur) ease-out both;
+}
+.modal-panel {
+  animation: panel-in var(--dur-slow) var(--ease-out) both;
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Tables ---------- */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+}
+.table-wrap > table {
+  min-width: 640px;
+  width: 100%;
+}
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f2efea;
+  box-shadow: inset 0 -1px 0 rgba(26, 26, 46, 0.1);
+}
+.table-wrap tbody tr {
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.table-wrap tbody tr:hover {
+  background-color: rgba(90, 79, 233, 0.05);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Navigation active state ---------- */
+.nav-link {
+  position: relative;
+}
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  background: #a89fd6;
+  border-radius: 2px;
+}
+
+/* ---------- Cards: subtle, calm hover ---------- */
+.card-hover {
+  transition: box-shadow var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+.card-hover:hover {
+  box-shadow: 0 10px 28px -16px rgba(26, 26, 46, 0.35);
+}
+
+.print-only {
+  display: none;
+}
+
+/* ---------- Print refinement ---------- */
 @media print {
-  header {
+  @page {
+    margin: 16mm;
+  }
+  body {
+    background: #fff;
+  }
+  header,
+  .no-print,
+  button,
+  .print-hide {
     display: none !important;
   }
   main {
     padding: 0 !important;
     max-width: 100% !important;
   }
-  .no-print,
-  button {
-    display: none !important;
-  }
   .print-area {
     box-shadow: none !important;
   }
-  table {
+  .print-only {
+    display: block;
+  }
+  .table-wrap {
+    overflow: visible !important;
+    border-radius: 0;
+  }
+  .table-wrap > table {
+    min-width: 0 !important;
+    width: 100% !important;
     font-size: 10px;
+  }
+  .table-wrap thead th {
+    position: static;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  .text-mint {
+    color: #00896f !important;
+  }
+  .text-orange {
+    color: #c2410c !important;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .page-enter,
+  .modal-backdrop,
+  .modal-panel {
+    animation: none !important;
+    transform: none !important;
   }
 }
