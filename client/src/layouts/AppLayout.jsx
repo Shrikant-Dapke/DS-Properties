@@ -32,6 +32,12 @@ export default function AppLayout() {
               <NavLink to="/payments" className={linkClass}>
                 Payments
               </NavLink>
+              <NavLink to="/expenses" className={linkClass}>
+                Expenses
+              </NavLink>
+              <NavLink to="/income" className={linkClass}>
+                Income
+              </NavLink>
               <NavLink to="/categories" className={linkClass}>
                 Categories
               </NavLink>

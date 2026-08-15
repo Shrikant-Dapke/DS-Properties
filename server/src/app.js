@@ -8,6 +8,8 @@ import customerRoutes from './routes/customer.routes.js';
 import plotRoutes from './routes/plot.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import categoryRoutes from './routes/category.routes.js';
+import expenseRoutes from './routes/expense.routes.js';
+import incomeRoutes from './routes/income.routes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -23,8 +25,8 @@ export function createApp() {
   app.use('/api/plots', plotRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/categories', categoryRoutes);
-
-  app.use(notFound);
+app.use('/api/expenses', expenseRoutes);
+  app.use('/api/income', incomeRoutes);
   app.use(errorHandler);
 
   return app;

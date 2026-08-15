@@ -13,6 +13,14 @@ import PlotEditPage from './pages/PlotEditPage.jsx';
 import PaymentsListPage from './pages/PaymentsListPage.jsx';
 import RecordPaymentPage from './pages/RecordPaymentPage.jsx';
 import PaymentDetailPage from './pages/PaymentDetailPage.jsx';
+import ExpensesListPage from './pages/ExpensesListPage.jsx';
+import RecordExpensePage from './pages/RecordExpensePage.jsx';
+import ExpenseDetailPage from './pages/ExpenseDetailPage.jsx';
+import ExpenseEditPage from './pages/ExpenseEditPage.jsx';
+import IncomeListPage from './pages/IncomeListPage.jsx';
+import RecordIncomePage from './pages/RecordIncomePage.jsx';
+import IncomeDetailPage from './pages/IncomeDetailPage.jsx';
+import IncomeEditPage from './pages/IncomeEditPage.jsx';
 import CategoryPage from './pages/CategoryPage.jsx';
 import { RequireAuth } from './routes/RequireAuth.jsx';
 
@@ -39,6 +47,14 @@ export default function App() {
         <Route path="/payments" element={<PaymentsListPage />} />
         <Route path="/payments/new" element={<RecordPaymentPage />} />
         <Route path="/payments/:id" element={<PaymentDetailPage />} />
+        <Route path="/expenses" element={<ExpensesListPage />} />
+        <Route path="/expenses/new" element={<RecordExpensePage />} />
+        <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
+        <Route path="/expenses/:id/edit" element={<ExpenseEditPage />} />
+        <Route path="/income" element={<IncomeListPage />} />
+        <Route path="/income/new" element={<RecordIncomePage />} />
+        <Route path="/income/:id" element={<IncomeDetailPage />} />
+        <Route path="/income/:id/edit" element={<IncomeEditPage />} />
         <Route path="/categories" element={<CategoryPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

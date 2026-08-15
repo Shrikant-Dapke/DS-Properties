@@ -936,7 +936,7 @@ Customers:             COMPLETE
 Plots:                 COMPLETE
 Payments:              COMPLETE
 Categories:            COMPLETE
-Income:                NOT STARTED
+Income:                COMPLETE
 Expenses:              NOT STARTED
 Reports:               NOT STARTED
 Dashboard:             NOT STARTED
