@@ -80,8 +80,7 @@ export default function PlotDetailPage() {
         ? `${plot.area}${plot.areaUnit ? ` ${plot.areaUnit}` : ''}`
         : '—',
     ],
-    ['List Price', plot.price],
-    ['Agreement Amount', plot.agreementAmount || '—'],
+    ['Plot Price', plot.price],
     ['Notes', plot.notes || '—'],
     ['Created', plot.createdAt ? new Date(plot.createdAt).toLocaleString() : '—'],
     ['Updated', plot.updatedAt ? new Date(plot.updatedAt).toLocaleString() : '—'],
@@ -151,37 +150,32 @@ export default function PlotDetailPage() {
         <>
           <div className="mt-3 flex flex-wrap gap-6">
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
-              <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Agreement Amount</p>
-              <p className="font-mono text-lg text-navy">
-                {plot.agreementAmount !== null && plot.agreementAmount !== undefined
-                  ? formatCurrency(plot.agreementAmount)
-                  : '—'}
-              </p>
+              <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Plot Price</p>
+              <p className="font-mono text-lg text-navy">{formatCurrency(plot.price)}</p>
             </div>
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Total Paid</p>
               <p className="font-mono text-lg text-mint">
-                {formatCurrency(payments.reduce((s, p) => s + Number(p.amount || 0), 0))}
+                {plot.customerId
+                  ? formatCurrency(payments.reduce((s, p) => s + Number(p.amount || 0), 0))
+                  : '—'}
               </p>
             </div>
             <div className="rounded-lg bg-white px-5 py-3 shadow-sm">
               <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Outstanding</p>
               <p className="font-mono text-lg text-orange">
-                {plot.agreementAmount !== null && plot.agreementAmount !== undefined
+                {plot.customerId
                   ? formatCurrency(
-                      Number(plot.agreementAmount) -
-                        payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+                      Math.max(
+                        0,
+                        Number(plot.price || 0) -
+                          payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+                      )
                     )
                   : '—'}
               </p>
             </div>
           </div>
-
-          {plot.agreementAmount === null || plot.agreementAmount === undefined ? (
-            <p className="mt-2 font-sans text-navy/60">
-              No payment can be recorded until the plot has a customer and an agreement amount.
-            </p>
-          ) : null}
 
           <h3 className="mt-6 font-mono text-sm uppercase tracking-wider text-navy/50">Payment History</h3>
           {payments.length === 0 ? (

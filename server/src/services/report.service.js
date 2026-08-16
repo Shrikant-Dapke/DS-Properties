@@ -7,10 +7,12 @@ import Plot from '../models/Plot.js';
 import Payment from '../models/Payment.js';
 import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
+import PartnerCapital from '../models/PartnerCapital.js';
+import LoanReceived from '../models/LoanReceived.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/errors.js';
 
-const REPORT_TYPES = ['customers', 'plots', 'payments', 'expenses', 'income', 'financial'];
+const REPORT_TYPES = ['customers', 'plots', 'payments', 'expenses', 'income', 'capital', 'loans', 'financial'];
 const PLOT_STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
 
@@ -91,30 +93,30 @@ async function buildCustomerReport(query, opts) {
   else if (hasPlots === 'without') filtered = customers.filter((c) => (countByCustomer.get(c._id.toString()) || 0) === 0);
 
   const ids = filtered.map((c) => c._id);
-  const [agreementRows, paidRows] = await Promise.all([
+  const [priceRows, paidRows] = await Promise.all([
     Plot.aggregate([
       { $match: { customerId: { $in: ids } } },
-      { $group: { _id: '$customerId', agreement: { $sum: '$agreementAmount' } } },
+      { $group: { _id: '$customerId', priceValue: { $sum: '$price' } } },
     ]),
     Payment.aggregate([
       { $match: { customerId: { $in: ids } } },
       { $group: { _id: '$customerId', paid: { $sum: '$amount' } } },
     ]),
   ]);
-  const agreementByCustomer = new Map(agreementRows.map((r) => [r._id.toString(), new Decimal(r.agreement.toString())]));
+  const priceByCustomer = new Map(priceRows.map((r) => [r._id.toString(), new Decimal(r.priceValue.toString())]));
   const paidByCustomer = new Map(paidRows.map((r) => [r._id.toString(), new Decimal(r.paid.toString())]));
 
   const rows = filtered.map((c) => {
-    const agreement = agreementByCustomer.get(c._id.toString()) || new Decimal(0);
+    const priceValue = priceByCustomer.get(c._id.toString()) || new Decimal(0);
     const paid = paidByCustomer.get(c._id.toString()) || new Decimal(0);
-    const outstanding = Decimal.max(0, agreement.minus(paid));
+    const outstanding = Decimal.max(0, priceValue.minus(paid));
     return {
       _id: c._id,
       name: c.name,
       phone: c.phone || '',
       email: c.email || '',
       plotCount: countByCustomer.get(c._id.toString()) || 0,
-      agreementValue: agreement.toString(),
+      priceValue: priceValue.toString(),
       paymentReceived: paid.toString(),
       outstanding: outstanding.toString(),
     };
@@ -122,17 +124,17 @@ async function buildCustomerReport(query, opts) {
 
   const summary = rows.reduce(
     (acc, r) => {
-      acc.agreementValue = acc.agreementValue.plus(new Decimal(r.agreementValue));
+      acc.priceValue = acc.priceValue.plus(new Decimal(r.priceValue));
       acc.paymentReceived = acc.paymentReceived.plus(new Decimal(r.paymentReceived));
       acc.outstanding = acc.outstanding.plus(new Decimal(r.outstanding));
       return acc;
     },
-    { agreementValue: new Decimal(0), paymentReceived: new Decimal(0), outstanding: new Decimal(0) }
+    { priceValue: new Decimal(0), paymentReceived: new Decimal(0), outstanding: new Decimal(0) }
   );
 
   const summaryObj = {
     customers: rows.length,
-    agreementValue: summary.agreementValue.toString(),
+    priceValue: summary.priceValue.toString(),
     paymentReceived: summary.paymentReceived.toString(),
     outstanding: summary.outstanding.toString(),
   };
@@ -169,9 +171,9 @@ async function buildPlotReport(query, opts) {
   const paidByPlot = new Map(paidRows.map((r) => [r._id.toString(), new Decimal(r.paid.toString())]));
 
   const rows = plots.map((p) => {
-    const assigned = !!(p.customerId && p.agreementAmount !== null && p.agreementAmount !== undefined);
+    const assigned = !!p.customerId;
     const paid = paidByPlot.get(p._id.toString()) || new Decimal(0);
-    const outstanding = assigned ? Decimal.max(0, new Decimal(p.agreementAmount.toString()).minus(paid)) : null;
+    const outstanding = assigned ? Decimal.max(0, new Decimal(p.price.toString()).minus(paid)) : null;
     return {
       _id: p._id,
       plotNumber: p.plotNumber,
@@ -179,8 +181,7 @@ async function buildPlotReport(query, opts) {
       areaUnit: p.areaUnit || '',
       location: p.location || '',
       status: p.status,
-      listPrice: p.price ? p.price.toString() : '',
-      agreementAmount: assigned ? p.agreementAmount.toString() : null,
+      plotPrice: p.price ? p.price.toString() : '',
       customerName: p.customerId ? p.customerId.name : 'Unassigned',
       paid: assigned ? paid.toString() : null,
       outstanding: outstanding ? outstanding.toString() : null,
@@ -190,17 +191,17 @@ async function buildPlotReport(query, opts) {
   const summary = rows.reduce(
     (acc, r) => {
       acc.plots += 1;
-      if (r.agreementAmount) acc.agreementValue = acc.agreementValue.plus(new Decimal(r.agreementAmount));
+      if (r.plotPrice) acc.priceValue = acc.priceValue.plus(new Decimal(r.plotPrice));
       if (r.paid) acc.totalPaid = acc.totalPaid.plus(new Decimal(r.paid));
       if (r.outstanding) acc.totalOutstanding = acc.totalOutstanding.plus(new Decimal(r.outstanding));
       return acc;
     },
-    { plots: 0, agreementValue: new Decimal(0), totalPaid: new Decimal(0), totalOutstanding: new Decimal(0) }
+    { plots: 0, priceValue: new Decimal(0), totalPaid: new Decimal(0), totalOutstanding: new Decimal(0) }
   );
 
   const summaryObj = {
     plots: summary.plots,
-    agreementValue: summary.agreementValue.toString(),
+    priceValue: summary.priceValue.toString(),
     totalPaid: summary.totalPaid.toString(),
     totalOutstanding: summary.totalOutstanding.toString(),
   };
@@ -378,6 +379,100 @@ async function buildIncomeReport(query, opts) {
   };
 }
 
+// ---------------- Partner Capital Report ----------------
+async function buildPartnerCapitalReport(query, opts) {
+  const { dateFrom, dateTo } = parseDateRange(query);
+  const partnerId = query.partner && query.partner !== 'All' ? query.partner : null;
+  if (partnerId && !isValidId(partnerId)) throw new AppError('Invalid partner filter', 400);
+
+  const filter = {};
+  if (dateFrom || dateTo) filter.date = { ...(dateFrom ? { $gte: dateFrom } : {}), ...(dateTo ? { $lte: dateTo } : {}) };
+  if (partnerId) filter.partnerId = partnerId;
+
+  const total = await sumDecimal(PartnerCapital, filter);
+  let items;
+  if (opts.paginate) {
+    const pageNum = Math.max(1, parseInt(query.page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50));
+    items = await PartnerCapital.find(filter)
+      .populate('partnerId', 'name')
+      .sort({ date: -1, createdAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+  } else {
+    items = await PartnerCapital.find(filter).populate('partnerId', 'name').sort({ date: -1, createdAt: -1 });
+  }
+
+  const rows = items.map((c) => ({
+    _id: c._id,
+    date: c.date,
+    partnerName: c.partnerId ? c.partnerId.name : '',
+    method: c.method,
+    reference: c.reference || '',
+    amount: c.amount.toString(),
+    notes: c.notes || '',
+  }));
+
+  const summaryObj = { totalCapital: total.toString(), count: rows.length };
+  const { rows: pageRows, pagination } = opts.paginate
+    ? { rows, pagination: { page: Math.max(1, parseInt(query.page, 10) || 1), limit: Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50)), total: rows.length, totalPages: 1 } }
+    : { rows, pagination: null };
+  return {
+    reportType: 'capital',
+    filters: { dateFrom: query.dateFrom || null, dateTo: query.dateTo || null, partner: partnerId || 'All' },
+    rows: pageRows,
+    summary: summaryObj,
+    pagination,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+// ---------------- Loan Received Report ----------------
+async function buildLoanReport(query, opts) {
+  const { dateFrom, dateTo } = parseDateRange(query);
+  const lender = query.lender && query.lender !== 'All' ? String(query.lender).trim() : '';
+
+  const filter = {};
+  if (dateFrom || dateTo) filter.date = { ...(dateFrom ? { $gte: dateFrom } : {}), ...(dateTo ? { $lte: dateTo } : {}) };
+  if (lender) filter.lender = { $regex: lender, $options: 'i' };
+
+  const total = await sumDecimal(LoanReceived, filter);
+  let items;
+  if (opts.paginate) {
+    const pageNum = Math.max(1, parseInt(query.page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50));
+    items = await LoanReceived.find(filter)
+      .sort({ date: -1, createdAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+  } else {
+    items = await LoanReceived.find(filter).sort({ date: -1, createdAt: -1 });
+  }
+
+  const rows = items.map((l) => ({
+    _id: l._id,
+    date: l.date,
+    lender: l.lender,
+    method: l.method,
+    reference: l.reference || '',
+    amount: l.amount.toString(),
+    notes: l.notes || '',
+  }));
+
+  const summaryObj = { totalLoans: total.toString(), count: rows.length };
+  const { rows: pageRows, pagination } = opts.paginate
+    ? { rows, pagination: { page: Math.max(1, parseInt(query.page, 10) || 1), limit: Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50)), total: rows.length, totalPages: 1 } }
+    : { rows, pagination: null };
+  return {
+    reportType: 'loans',
+    filters: { dateFrom: query.dateFrom || null, dateTo: query.dateTo || null, lender: lender || 'All' },
+    rows: pageRows,
+    summary: summaryObj,
+    pagination,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // ---------------- Combined Financial Report ----------------
 async function buildFinancialReport(query, opts) {
   const { dateFrom, dateTo } = parseDateRange(query);
@@ -391,29 +486,35 @@ async function buildFinancialReport(query, opts) {
     expenseMatch.date = range;
   }
 
-  const [customerPaymentsReceived, otherIncome, expenses] = await Promise.all([
+  const [customerPaymentsReceived, otherIncome, expenses, partnerCapital, loansReceived] = await Promise.all([
     sumDecimal(Payment, paymentMatch),
     sumDecimal(Income, incomeMatch),
     sumDecimal(Expense, expenseMatch),
+    sumDecimal(PartnerCapital, incomeMatch),
+    sumDecimal(LoanReceived, incomeMatch),
   ]);
 
   // Outstanding receivables are current-state, not date-filtered.
   const [plots, paidRows] = await Promise.all([
-    Plot.find({ agreementAmount: { $ne: null } }).select('agreementAmount'),
+    Plot.find({ customerId: { $ne: null } }).select('price'),
     Payment.aggregate([{ $group: { _id: '$plotId', paid: { $sum: '$amount' } } }]),
   ]);
   const paidByPlot = new Map(paidRows.map((r) => [r._id.toString(), new Decimal(r.paid.toString())]));
   let outstandingReceivables = new Decimal(0);
   for (const plot of plots) {
-    const agreement = new Decimal(plot.agreementAmount.toString());
+    const price = new Decimal(plot.price.toString());
     const paid = paidByPlot.get(plot._id.toString()) || new Decimal(0);
-    const outstanding = Decimal.max(0, agreement.minus(paid));
+    const outstanding = Decimal.max(0, price.minus(paid));
     if (outstanding.gt(0)) outstandingReceivables = outstandingReceivables.plus(outstanding);
   }
 
   const operatingIncomeResult = otherIncome.minus(expenses);
+  const totalMoneyReceived = customerPaymentsReceived.plus(partnerCapital).plus(loansReceived);
   const summaryObj = {
     customerPaymentsReceived: customerPaymentsReceived.toString(),
+    partnerCapital: partnerCapital.toString(),
+    loansReceived: loansReceived.toString(),
+    totalMoneyReceived: totalMoneyReceived.toString(),
     otherIncome: otherIncome.toString(),
     expenses: expenses.toString(),
     operatingIncomeResult: operatingIncomeResult.toString(),
@@ -436,6 +537,8 @@ const BUILDERS = {
   payments: buildPaymentReport,
   expenses: buildExpenseReport,
   income: buildIncomeReport,
+  capital: buildPartnerCapitalReport,
+  loans: buildLoanReport,
   financial: buildFinancialReport,
 };
 
@@ -456,6 +559,8 @@ const REPORT_TITLES = {
   payments: 'Payment Report',
   expenses: 'Expense Report',
   income: 'Income Report',
+  capital: 'Partner Capital Report',
+  loans: 'Loan Received Report',
   financial: 'Combined Financial Report',
 };
 
@@ -478,7 +583,7 @@ function reportColumns(type) {
         { key: 'phone', header: 'Phone' },
         { key: 'email', header: 'Email' },
         { key: 'plotCount', header: 'Plots' },
-        { key: 'agreementValue', header: 'Agreement Value', money: true },
+        { key: 'priceValue', header: 'Plot Price', money: true },
         { key: 'paymentReceived', header: 'Payments Received', money: true },
         { key: 'outstanding', header: 'Outstanding', money: true },
       ];
@@ -489,8 +594,7 @@ function reportColumns(type) {
         { key: 'areaUnit', header: 'Unit' },
         { key: 'location', header: 'Location' },
         { key: 'status', header: 'Status' },
-        { key: 'listPrice', header: 'List Price', money: true },
-        { key: 'agreementAmount', header: 'Agreement', money: true },
+        { key: 'plotPrice', header: 'Plot Price', money: true },
         { key: 'customerName', header: 'Customer' },
         { key: 'paid', header: 'Paid', money: true },
         { key: 'outstanding', header: 'Outstanding', money: true },
@@ -511,6 +615,24 @@ function reportColumns(type) {
         { key: 'date', header: 'Date' },
         { key: 'categoryName', header: 'Category' },
         { key: 'description', header: 'Description' },
+        { key: 'reference', header: 'Reference' },
+        { key: 'amount', header: 'Amount', money: true },
+        { key: 'notes', header: 'Notes' },
+      ];
+    case 'capital':
+      return [
+        { key: 'date', header: 'Date' },
+        { key: 'partnerName', header: 'Partner' },
+        { key: 'method', header: 'Method' },
+        { key: 'reference', header: 'Reference' },
+        { key: 'amount', header: 'Amount', money: true },
+        { key: 'notes', header: 'Notes' },
+      ];
+    case 'loans':
+      return [
+        { key: 'date', header: 'Date' },
+        { key: 'lender', header: 'Lender / Source' },
+        { key: 'method', header: 'Method' },
         { key: 'reference', header: 'Reference' },
         { key: 'amount', header: 'Amount', money: true },
         { key: 'notes', header: 'Notes' },
@@ -536,14 +658,14 @@ function summaryLines(report) {
     case 'customers':
       return [
         ['Customers', s.customers],
-        ['Total Agreement Value', formatINR(s.agreementValue)],
+        ['Total Plot Price', formatINR(s.priceValue)],
         ['Total Payments Received', formatINR(s.paymentReceived)],
         ['Total Outstanding', formatINR(s.outstanding)],
       ];
     case 'plots':
       return [
         ['Plots', s.plots],
-        ['Total Agreement Value', formatINR(s.agreementValue)],
+        ['Total Plot Price', formatINR(s.priceValue)],
         ['Total Paid', formatINR(s.totalPaid)],
         ['Total Outstanding', formatINR(s.totalOutstanding)],
       ];
@@ -553,9 +675,16 @@ function summaryLines(report) {
       return [['Total Expenses', formatINR(s.totalExpenses)], ['Records', s.count]];
     case 'income':
       return [['Total Other Income', formatINR(s.totalOtherIncome)], ['Records', s.count]];
+    case 'capital':
+      return [['Total Partner Capital', formatINR(s.totalCapital)], ['Contributions', s.count]];
+    case 'loans':
+      return [['Total Loans Received', formatINR(s.totalLoans)], ['Records', s.count]];
     case 'financial':
       return [
         ['Customer Payments Received', formatINR(s.customerPaymentsReceived)],
+        ['Partner Capital', formatINR(s.partnerCapital)],
+        ['Loans Received', formatINR(s.loansReceived)],
+        ['Total Money Received', formatINR(s.totalMoneyReceived)],
         ['Other Income', formatINR(s.otherIncome)],
         ['Expenses', formatINR(s.expenses)],
         ['Operating Income Result', formatINR(s.operatingIncomeResult)],

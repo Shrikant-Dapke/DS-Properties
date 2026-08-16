@@ -5,6 +5,8 @@ import Plot from '../models/Plot.js';
 import Payment from '../models/Payment.js';
 import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
+import PartnerCapital from '../models/PartnerCapital.js';
+import LoanReceived from '../models/LoanReceived.js';
 import { AppError } from '../utils/errors.js';
 
 const PLOT_STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
@@ -51,9 +53,9 @@ async function getPlotStatusCounts() {
 }
 
 async function getReceivables() {
-  // Current-state receivables: derived from agreementAmount and all payments (not date-filtered).
+  // Current-state receivables: derived from each assigned plot's price and all payments (not date-filtered).
   const [plots, paidRows] = await Promise.all([
-    Plot.find({ agreementAmount: { $ne: null } }).select('agreementAmount status'),
+    Plot.find({ customerId: { $ne: null } }).select('price status'),
     Payment.aggregate([{ $group: { _id: '$plotId', paid: { $sum: '$amount' } } }]),
   ]);
 
@@ -67,12 +69,12 @@ async function getReceivables() {
   let outstandingPlots = 0;
 
   for (const plot of plots) {
-    const agreement = new Decimal(plot.agreementAmount.toString());
+    const price = new Decimal(plot.price.toString());
     const paid = paidByPlot.get(plot._id.toString()) || new Decimal(0);
     // Do not allow negative outstanding under current rules.
-    const outstanding = Decimal.max(0, agreement.minus(paid));
+    const outstanding = Decimal.max(0, price.minus(paid));
 
-    if (agreement.gt(0) && outstanding.eq(0)) {
+    if (price.gt(0) && outstanding.eq(0)) {
       fullyPaidPlots += 1;
     } else if (outstanding.gt(0)) {
       outstandingPlots += 1;
@@ -93,26 +95,40 @@ async function getTrends({ dateFrom, dateTo, granularity = 'month' } = {}) {
   }
   const range = parseDateRange(dateFrom, dateTo);
   const dateField = { format: '%Y-%m', date: '$date' };
+  const matchStage = (extra) => (range ? [{ $match: { date: range, ...extra } }] : [{ $match: extra }]);
 
-  const [payments, income, expenses] = await Promise.all([
-    Payment.aggregate(
-      range ? [{ $match: { date: range } }, { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-             : [{ $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-    ),
-    Income.aggregate(
-      range ? [{ $match: { date: range } }, { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-             : [{ $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-    ),
-    Expense.aggregate(
-      range ? [{ $match: { deleted: false, date: range } }, { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-             : [{ $match: { deleted: false } }, { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } }, { $sort: { _id: 1 } }]
-    ),
+  const [payments, income, expenses, capital, loans] = await Promise.all([
+    Payment.aggregate([
+      ...matchStage({}),
+      { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    Income.aggregate([
+      ...matchStage({}),
+      { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    Expense.aggregate([
+      ...matchStage({ deleted: false }),
+      { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    PartnerCapital.aggregate([
+      ...matchStage({}),
+      { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    LoanReceived.aggregate([
+      ...matchStage({}),
+      { $group: { _id: { $dateToString: dateField }, total: { $sum: '$amount' } } },
+      { $sort: { _id: 1 } },
+    ]),
   ]);
 
   const byPeriod = new Map();
   const ensure = (period) => {
     if (!byPeriod.has(period)) {
-      byPeriod.set(period, { period, payments: '0', income: '0', expenses: '0' });
+      byPeriod.set(period, { period, payments: '0', income: '0', expenses: '0', capital: '0', loans: '0' });
     }
     return byPeriod.get(period);
   };
@@ -120,12 +136,14 @@ async function getTrends({ dateFrom, dateTo, granularity = 'month' } = {}) {
   for (const row of payments) ensure(row._id).payments = new Decimal(row.total.toString()).toString();
   for (const row of income) ensure(row._id).income = new Decimal(row.total.toString()).toString();
   for (const row of expenses) ensure(row._id).expenses = new Decimal(row.total.toString()).toString();
+  for (const row of capital) ensure(row._id).capital = new Decimal(row.total.toString()).toString();
+  for (const row of loans) ensure(row._id).loans = new Decimal(row.total.toString()).toString();
 
   return Array.from(byPeriod.values());
 }
 
 async function getRecentActivity(limit = 5) {
-  const [payments, income, expenses] = await Promise.all([
+  const [payments, income, expenses, capital, loans] = await Promise.all([
     Payment.find()
       .populate('customerId', 'name')
       .populate('plotId', 'plotNumber')
@@ -139,8 +157,15 @@ async function getRecentActivity(limit = 5) {
       .populate('categoryId', 'name')
       .sort({ date: -1, createdAt: -1 })
       .limit(limit),
+    PartnerCapital.find()
+      .populate('partnerId', 'name')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(limit),
+    LoanReceived.find()
+      .sort({ date: -1, createdAt: -1 })
+      .limit(limit),
   ]);
-  return { payments, income, expenses };
+  return { payments, income, expenses, capital, loans };
 }
 
 export async function getDashboardSummary({ dateFrom, dateTo } = {}) {
@@ -150,7 +175,7 @@ export async function getDashboardSummary({ dateFrom, dateTo } = {}) {
   const incomeMatch = range ? { date: range } : {};
   const expenseMatch = range ? { deleted: false, date: range } : { deleted: false };
 
-  const [customers, plots, totalReceived, receivables, totalOtherIncome, totalExpenses] =
+  const [customers, plots, totalReceived, receivables, totalOtherIncome, totalExpenses, totalCapital, totalLoans] =
     await Promise.all([
       getCustomerCount(),
       getPlotStatusCounts(),
@@ -158,9 +183,14 @@ export async function getDashboardSummary({ dateFrom, dateTo } = {}) {
       getReceivables(),
       sumDecimal(Income, incomeMatch),
       sumDecimal(Expense, expenseMatch),
+      sumDecimal(PartnerCapital, incomeMatch),
+      sumDecimal(LoanReceived, incomeMatch),
     ]);
 
   const operatingResult = totalOtherIncome.minus(totalExpenses);
+  // Money received from all non-sales-specific sources. Explicitly NOT revenue:
+  // only customer payments, partner capital, and loans are included here.
+  const totalMoneyReceived = totalReceived.plus(totalCapital).plus(totalLoans);
 
   return {
     customers: { total: customers },
@@ -170,6 +200,9 @@ export async function getDashboardSummary({ dateFrom, dateTo } = {}) {
     income: { totalOtherIncome: totalOtherIncome.toString() },
     expenses: { totalExpenses: totalExpenses.toString() },
     operatingResult: { amount: operatingResult.toString() },
+    partnerCapital: { totalContributed: totalCapital.toString() },
+    loans: { totalReceived: totalLoans.toString() },
+    moneyReceived: { total: totalMoneyReceived.toString() },
     dateRange: range ? { dateFrom, dateTo } : null,
   };
 }

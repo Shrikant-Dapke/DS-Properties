@@ -80,18 +80,14 @@ export default function RecordPaymentPage() {
   }, [plotId]);
 
   const paid = paymentsForPlot.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const agreement =
-    plotDetail && plotDetail.agreementAmount !== null && plotDetail.agreementAmount !== undefined
-      ? Number(plotDetail.agreementAmount)
+  const plotPrice =
+    plotDetail && plotDetail.price !== null && plotDetail.price !== undefined
+      ? Number(plotDetail.price)
       : null;
-  const remaining = agreement !== null ? agreement - paid : null;
+  const remaining = plotPrice !== null ? plotPrice - paid : null;
   const resulting = amount && remaining !== null ? remaining - Number(amount) : null;
 
-  const canRecord =
-    plotDetail &&
-    plotDetail.customerId &&
-    plotDetail.agreementAmount !== null &&
-    plotDetail.agreementAmount !== undefined;
+  const canRecord = plotDetail && plotDetail.customerId;
 
   function validate() {
     if (!plotId) {
@@ -196,8 +192,8 @@ export default function RecordPaymentPage() {
             <p className="font-mono text-xs uppercase tracking-wider text-navy/50">Plot financials (read-only)</p>
             <dl className="mt-2 space-y-1 font-mono text-sm text-navy">
               <div className="flex justify-between">
-                <dt>Agreement Amount</dt>
-                <dd>{agreement !== null ? formatCurrency(agreement) : '—'}</dd>
+                <dt>Plot Price</dt>
+                <dd>{plotPrice !== null ? formatCurrency(plotPrice) : '—'}</dd>
               </div>
               <div className="flex justify-between">
                 <dt>Paid So Far</dt>
@@ -212,7 +208,7 @@ export default function RecordPaymentPage() {
             </dl>
             {!canRecord && (
               <p className="mt-2 text-xs text-orange">
-                No payment can be recorded until the plot has a customer and an agreement amount.
+                No payment can be recorded until the plot has a customer assigned.
               </p>
             )}
           </div>

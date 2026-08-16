@@ -13,7 +13,6 @@ const plotSchema = new mongoose.Schema(
     areaUnit: { type: String, trim: true },
     location: { type: String, trim: true },
     price: { type: mongoose.Schema.Types.Decimal128, required: true },
-    agreementAmount: { type: mongoose.Schema.Types.Decimal128, default: null },
     status: {
       type: String,
       enum: ['Available', 'Reserved', 'Allocated', 'Sold'],
@@ -32,7 +31,6 @@ const plotSchema = new mongoose.Schema(
 plotSchema.set('toJSON', {
   transform: (doc, ret) => {
     if (ret.price) ret.price = ret.price.toString();
-    if (ret.agreementAmount) ret.agreementAmount = ret.agreementAmount.toString();
     return ret;
   },
 });

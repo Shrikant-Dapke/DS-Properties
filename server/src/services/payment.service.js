@@ -60,13 +60,10 @@ export async function createPayment(body) {
       if (plot.customerId.toString() !== String(body.customerId)) {
         throw new AppError('Payment customer does not match the plot customer', 400);
       }
-      if (plot.agreementAmount === null || plot.agreementAmount === undefined) {
-        throw new AppError('Plot has no agreement amount; payment cannot be recorded', 400);
-      }
 
-      const agreement = new Decimal(plot.agreementAmount.toString());
+      const price = new Decimal(plot.price.toString());
       const paid = await sumPlotPaid(plot._id, session);
-      const remaining = agreement.minus(paid);
+      const remaining = price.minus(paid);
 
       if (amount.gt(remaining)) {
         throw new AppError(

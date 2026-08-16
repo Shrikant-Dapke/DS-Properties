@@ -23,6 +23,12 @@ import IncomeDetailPage from './pages/IncomeDetailPage.jsx';
 import IncomeEditPage from './pages/IncomeEditPage.jsx';
 import CategoryPage from './pages/CategoryPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
+import PartnersListPage from './pages/PartnersListPage.jsx';
+import PartnerCreatePage from './pages/PartnerCreatePage.jsx';
+import PartnerDetailPage from './pages/PartnerDetailPage.jsx';
+import PartnerEditPage from './pages/PartnerEditPage.jsx';
+import ReceiptsPage from './pages/ReceiptsPage.jsx';
+import RecordReceiptPage from './pages/RecordReceiptPage.jsx';
 import { RequireAuth } from './routes/RequireAuth.jsx';
 
 export default function App() {
@@ -57,6 +63,12 @@ export default function App() {
         <Route path="/income/:id" element={<IncomeDetailPage />} />
         <Route path="/income/:id/edit" element={<IncomeEditPage />} />
         <Route path="/categories" element={<CategoryPage />} />
+        <Route path="/partners" element={<PartnersListPage />} />
+        <Route path="/partners/new" element={<PartnerCreatePage />} />
+        <Route path="/partners/:id" element={<PartnerDetailPage />} />
+        <Route path="/partners/:id/edit" element={<PartnerEditPage />} />
+        <Route path="/receipts" element={<ReceiptsPage />} />
+        <Route path="/receipts/new" element={<RecordReceiptPage />} />
         <Route path="/reports" element={<ReportsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

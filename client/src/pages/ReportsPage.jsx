@@ -3,6 +3,7 @@ import * as reportService from '../services/report.service.js';
 import * as customerService from '../services/customer.service.js';
 import * as plotService from '../services/plot.service.js';
 import * as categoryService from '../services/category.service.js';
+import * as partnerService from '../services/partner.service.js';
 import Card from '../components/Card.jsx';
 import Button from '../components/Button.jsx';
 import Spinner from '../components/Spinner.jsx';
@@ -17,6 +18,8 @@ const REPORT_TYPES = [
   { value: 'payments', label: 'Payment Report' },
   { value: 'expenses', label: 'Expense Report' },
   { value: 'income', label: 'Income Report' },
+  { value: 'capital', label: 'Partner Capital Report' },
+  { value: 'loans', label: 'Loan Received Report' },
   { value: 'financial', label: 'Combined Financial Report' },
 ];
 
@@ -75,7 +78,7 @@ const COLUMN_DEFS = {
     { key: 'phone', header: 'Phone' },
     { key: 'email', header: 'Email' },
     { key: 'plotCount', header: 'Plots' },
-    { key: 'agreementValue', header: 'Agreement Value', money: true },
+    { key: 'priceValue', header: 'Plot Price', money: true },
     { key: 'paymentReceived', header: 'Payments Received', money: true },
     { key: 'outstanding', header: 'Outstanding', money: true },
   ],
@@ -85,8 +88,7 @@ const COLUMN_DEFS = {
     { key: 'areaUnit', header: 'Unit' },
     { key: 'location', header: 'Location' },
     { key: 'status', header: 'Status' },
-    { key: 'listPrice', header: 'List Price', money: true },
-    { key: 'agreementAmount', header: 'Agreement', money: true },
+    { key: 'plotPrice', header: 'Plot Price', money: true },
     { key: 'customerName', header: 'Customer' },
     { key: 'paid', header: 'Paid', money: true },
     { key: 'outstanding', header: 'Outstanding', money: true },
@@ -112,6 +114,22 @@ const COLUMN_DEFS = {
     { key: 'date', header: 'Date' },
     { key: 'categoryName', header: 'Category' },
     { key: 'description', header: 'Description' },
+    { key: 'reference', header: 'Reference' },
+    { key: 'amount', header: 'Amount', money: true },
+    { key: 'notes', header: 'Notes' },
+  ],
+  capital: [
+    { key: 'date', header: 'Date' },
+    { key: 'partnerName', header: 'Partner' },
+    { key: 'method', header: 'Method' },
+    { key: 'reference', header: 'Reference' },
+    { key: 'amount', header: 'Amount', money: true },
+    { key: 'notes', header: 'Notes' },
+  ],
+  loans: [
+    { key: 'date', header: 'Date' },
+    { key: 'lender', header: 'Lender / Source' },
+    { key: 'method', header: 'Method' },
     { key: 'reference', header: 'Reference' },
     { key: 'amount', header: 'Amount', money: true },
     { key: 'notes', header: 'Notes' },
@@ -142,9 +160,12 @@ function SummaryCards({ report }) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {card('Customer Payments Received', formatCurrency(s.customerPaymentsReceived), 'text-mint')}
+        {card('Partner Capital', formatCurrency(s.partnerCapital), 'text-mint')}
+        {card('Loans Received', formatCurrency(s.loansReceived), 'text-mint')}
+        {card('Total Money Received', formatCurrency(s.totalMoneyReceived), 'text-navy')}
         {card('Other Income', formatCurrency(s.otherIncome), 'text-mint')}
         {card('Expenses', formatCurrency(s.expenses), 'text-orange')}
-        {card('Operating Income Result', formatCurrency(s.operatingIncomeResult), op >= 0 ? 'text-mint' : 'text-orange')}
+        {card('Operating Result', formatCurrency(s.operatingIncomeResult), op >= 0 ? 'text-mint' : 'text-orange')}
         {card('Outstanding Receivables', formatCurrency(s.outstandingReceivables), 'text-orange')}
       </div>
     );
@@ -153,7 +174,7 @@ function SummaryCards({ report }) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {card('Customers', s.customers)}
-        {card('Total Agreement Value', formatCurrency(s.agreementValue))}
+        {card('Total Plot Price', formatCurrency(s.priceValue))}
         {card('Total Payments Received', formatCurrency(s.paymentReceived), 'text-mint')}
         {card('Total Outstanding', formatCurrency(s.outstanding), 'text-orange')}
       </div>
@@ -163,7 +184,7 @@ function SummaryCards({ report }) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {card('Plots', s.plots)}
-        {card('Total Agreement Value', formatCurrency(s.agreementValue))}
+        {card('Total Plot Price', formatCurrency(s.priceValue))}
         {card('Total Paid', formatCurrency(s.totalPaid), 'text-mint')}
         {card('Total Outstanding', formatCurrency(s.totalOutstanding), 'text-orange')}
       </div>
@@ -190,6 +211,22 @@ function SummaryCards({ report }) {
       </div>
     );
   }
+  if (report.reportType === 'capital') {
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        {card('Total Partner Capital', formatCurrency(s.totalCapital), 'text-mint')}
+        {card('Contributions', s.count)}
+      </div>
+    );
+  }
+  if (report.reportType === 'loans') {
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-2">
+        {card('Total Loans Received', formatCurrency(s.totalLoans), 'text-mint')}
+        {card('Records', s.count)}
+      </div>
+    );
+  }
   return null;
 }
 
@@ -211,6 +248,9 @@ export default function ReportsPage() {
   const [location, setLocation] = useState('');
   const [method, setMethod] = useState('All');
   const [category, setCategory] = useState('All');
+  const [partnerRpt, setPartnerRpt] = useState('All');
+  const [lenderRpt, setLenderRpt] = useState('');
+  const [rptPartners, setRptPartners] = useState([]);
   const [datePreset, setDatePreset] = useState('thisMonth');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -225,6 +265,7 @@ export default function ReportsPage() {
   useEffect(() => {
     customerService.listCustomers({ limit: 200 }).then((r) => setCustomers(r.items || [])).catch(() => {});
     plotService.listPlots({ limit: 200 }).then((r) => setPlots(r.items || [])).catch(() => {});
+    partnerService.listPartners({ limit: 200 }).then((r) => setRptPartners(r.items || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -235,7 +276,7 @@ export default function ReportsPage() {
     }
   }, [reportType]);
 
-  const usesDate = reportType === 'payments' || reportType === 'expenses' || reportType === 'income' || reportType === 'financial';
+  const usesDate = reportType === 'payments' || reportType === 'expenses' || reportType === 'income' || reportType === 'financial' || reportType === 'capital' || reportType === 'loans';
   const range = useMemo(() => computeDateRange(datePreset, customFrom, customTo), [datePreset, customFrom, customTo]);
 
   function buildParams() {
@@ -265,6 +306,16 @@ export default function ReportsPage() {
     if (reportType === 'financial') {
       if (range.dateFrom) p.dateFrom = range.dateFrom;
       if (range.dateTo) p.dateTo = range.dateTo;
+    }
+    if (reportType === 'capital') {
+      if (range.dateFrom) p.dateFrom = range.dateFrom;
+      if (range.dateTo) p.dateTo = range.dateTo;
+      if (partnerRpt !== 'All') p.partner = partnerRpt;
+    }
+    if (reportType === 'loans') {
+      if (range.dateFrom) p.dateFrom = range.dateFrom;
+      if (range.dateTo) p.dateTo = range.dateTo;
+      if (lenderRpt.trim()) p.lender = lenderRpt.trim();
     }
     return p;
   }
@@ -313,6 +364,8 @@ export default function ReportsPage() {
     plot !== 'All',
     method !== 'All',
     category !== 'All',
+    partnerRpt !== 'All',
+    lenderRpt.trim(),
     datePreset !== 'thisMonth',
     customFrom,
     customTo,
@@ -327,6 +380,8 @@ export default function ReportsPage() {
     setPlot('All');
     setMethod('All');
     setCategory('All');
+    setPartnerRpt('All');
+    setLenderRpt('');
     setDatePreset('thisMonth');
     setCustomFrom('');
     setCustomTo('');
@@ -528,6 +583,37 @@ export default function ReportsPage() {
               </div>
             )}
 
+            {reportType === 'capital' && (
+              <div className="min-w-[170px]">
+                <label htmlFor="rpt-partner" className={fieldLabel}>
+                  Partner
+                </label>
+                <select id="rpt-partner" className={inputClass} value={partnerRpt} onChange={(e) => setPartnerRpt(e.target.value)}>
+                  <option value="All">All Partners</option>
+                  {rptPartners.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {reportType === 'loans' && (
+              <div className="min-w-[170px] flex-1">
+                <label htmlFor="rpt-lender" className={fieldLabel}>
+                  Lender / Source
+                </label>
+                <input
+                  id="rpt-lender"
+                  className={inputClass}
+                  value={lenderRpt}
+                  onChange={(e) => setLenderRpt(e.target.value)}
+                  placeholder="Search lender / source"
+                />
+              </div>
+            )}
+
             <div className="flex items-end">
               <Button onClick={handleGenerate} loading={loading}>
                 Generate Report
@@ -580,12 +666,13 @@ export default function ReportsPage() {
             <SummaryCards report={result} />
           </div>
 
-          {result.reportType === 'financial' ? (
-            <p className="mt-4 font-sans text-sm text-navy/60">
-              Operating Income Result = Other Income − Expenses. Customer Payments Received and Outstanding Receivables are
-              separate property/customer metrics and are not part of the operating result.
-            </p>
-          ) : (
+           {result.reportType === 'financial' ? (
+             <p className="mt-4 font-sans text-sm text-navy/60">
+               Operating Income Result = Other Income − Expenses. Customer Payments Received, Partner Capital, and Loans
+               Received are funding/receivable metrics and are not part of the operating result. Capital and loans are
+               explicitly excluded from revenue.
+             </p>
+           ) : (
             <div className="mt-4 table-wrap rounded-lg bg-white shadow-sm">
               <table className="w-full text-left">
                 <thead className="bg-chalk text-navy/60">

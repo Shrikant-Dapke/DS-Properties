@@ -148,9 +148,9 @@ export default function CustomerDetailPage() {
                       paidByPlot[key] = (paidByPlot[key] || 0) + Number(p.amount || 0);
                     });
                     return plots.reduce((sum, plot) => {
-                      if (plot.agreementAmount === null || plot.agreementAmount === undefined) return sum;
+                      if (!plot.customerId) return sum;
                       const paid = paidByPlot[plot._id] || 0;
-                      return sum + (Number(plot.agreementAmount) - paid);
+                      return sum + Math.max(0, Number(plot.price || 0) - paid);
                     }, 0);
                   })()
                 )}

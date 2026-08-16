@@ -105,13 +105,13 @@ Use:
 - MongoDB
 - Local MongoDB instance during development
 
-Default development connection uses a local single-node replica set (required for future transaction support):
+Default development connection uses the local single-node replica set `rs0` (required for MongoDB multi-document transactions used by the payments flow):
 
 ```text
-mongodb://127.0.0.1:27018/ds_properties?replicaSet=rs0
+mongodb://127.0.0.1:27017/ds_properties?replicaSet=rs0
 ```
 
-The DS Properties dev MongoDB runs as replica set `rs0` on port `27018`. Use this URI in `server/.env` (see `server/.env.example`).
+The DS Properties dev MongoDB runs as replica set `rs0` on the standard MongoDB port `27017`. Use this URI in `server/.env` (see `server/.env.example`).
 
 Do not introduce MongoDB Atlas unless explicitly requested.
 
@@ -335,14 +335,14 @@ Prefer:
 
 ```text
 Outstanding (per plot) =
-Plot.agreementAmount
+Plot.price
 -
 Σ(Payments where plotId = this plot)
 ```
 
-`Plot.agreementAmount` is the actual agreed amount with the customer; `Plot.price` remains the original/list price for reference. See Decision 007.
+`Plot.price` is the final negotiated price agreed with the customer (entered by the admin after offline negotiation). There is no separate agreement/negotiation-price field. See Decision 007.
 
-Outstanding is always derived from `agreementAmount` and recorded payments; it is never stored as an editable number.
+Outstanding is always derived from `price` and recorded payments; it is never stored as an editable number.
 
 If the business later requires adjustments, discounts, penalties, or manual balance corrections, model those explicitly rather than silently modifying totals.
 
@@ -544,8 +544,8 @@ Business rules enforced by the backend:
 
 ```text
 - Payment.customerId MUST equal Plot.customerId for the supplied plotId.
-- New payment must NOT exceed Plot.agreementAmount (no overpayments in V1).
-- Outstanding (per plot) = agreementAmount − Σ(payments for that plot); derived, never stored.
+- New payment must NOT exceed Plot.price (no overpayments in V1).
+- Outstanding (per plot) = price − Σ(payments for that plot); derived, never stored.
 - Operating Income Result = Income − Expenses; separate from customer payments / receivables.
 ```
 
@@ -1023,11 +1023,11 @@ Do not:
 
 ### Decision 007 — Amount due / outstanding
 
-**Decision:** Keep both `Plot.price` and `Plot.agreementAmount`.
-- `price` = original / list price. **Required for every plot.**
-- `agreementAmount` = actual agreed amount with the customer. **Nullable.** An Available plot with no customer has no agreement yet, so `agreementAmount` is `null` until a customer/agreement exists.
-- `customerId` on `Plot` is **nullable** (null while the plot is Available / unassigned).
-- `Outstanding = agreementAmount − Σ(payments associated with that plot)` — only meaningful once `agreementAmount` and a customer exist.
+**Decision:** A plot has a single price field — `Plot.price`.
+- `price` = the final negotiated/selling price agreed with the customer, entered by the admin after offline negotiation. **Required for every plot.**
+- There is **no** separate `agreementAmount`, `agreementPrice`, or negotiation-price field. The original pre-negotiation price is not tracked.
+- `customerId` on `Plot` is **nullable** (null while the plot is Available / unassigned). Outstanding is meaningful only for assigned plots (a plot with a customer).
+- `Outstanding = price − Σ(payments associated with that plot)` for an assigned plot.
 
 Outstanding is always derived; never stored as an editable number.
 
@@ -1068,7 +1068,7 @@ Do NOT create a public `/setup` endpoint or public registration.
 
 **Decision:** Use MongoDB `Decimal128` for all monetary values.
 Do NOT store calculated outstanding balances.
-Always calculate balances from `agreementAmount` and recorded payments.
+Always calculate balances from `price` and recorded payments.
 
 ### Decision 014 — Deletion / correction policy
 
@@ -1107,7 +1107,7 @@ Reject (400/validation error) any payment where the supplied `customerId` does n
 
 ### Decision 019 — V1 overpayment rule
 
-**Decision:** A new payment must NOT cause `Σ(payments for a plot)` to exceed `Plot.agreementAmount`.
+**Decision:** A new payment must NOT cause `Σ(payments for a plot)` to exceed `Plot.price`.
 Reject overpayments in V1.
 Do NOT implement advance / unallocated / credit-balance payments yet.
 

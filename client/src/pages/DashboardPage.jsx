@@ -88,7 +88,9 @@ export default function DashboardPage() {
     summary.plots.total > 0 ||
     Number(summary.payments.totalReceived) > 0 ||
     Number(summary.income.totalOtherIncome) > 0 ||
-    Number(summary.expenses.totalExpenses) > 0;
+    Number(summary.expenses.totalExpenses) > 0 ||
+    Number(summary.partnerCapital.totalContributed) > 0 ||
+    Number(summary.loans.totalReceived) > 0;
 
   return (
     <section>
@@ -154,6 +156,29 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Funding & receipts — separate from revenue */}
+      <SectionTitle>Funding & Receipts (not revenue)</SectionTitle>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <StatCard
+        label="Partner Capital"
+        value={formatCurrency(summary.partnerCapital.totalContributed)}
+        valueClass="text-mint"
+        sub="Investment by partners"
+        />
+        <StatCard
+        label="Loans Received"
+        value={formatCurrency(summary.loans.totalReceived)}
+        valueClass="text-mint"
+        sub="Borrowed funds"
+        />
+        <Card
+          label="Total Money Received"
+          value={formatCurrency(summary.moneyReceived.total)}
+          valueClass="text-navy"
+          sub="Payments + capital + loans"
+        />
+      </div>
+
       {/* Recent activity */}
       <SectionTitle>Recent Activity</SectionTitle>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -195,6 +220,30 @@ export default function DashboardPage() {
           )}
           dateOf={(e) => e.date}
         />
+        <RecentColumn
+          title="Partner Capital"
+          to="/receipts?type=capital"
+          items={recent.capital}
+          render={(c) => (
+            <>
+              <span className="font-mono text-mint">{formatCurrency(c.amount)}</span>
+              <span className="ml-2 font-sans text-navy/60">{c.partnerId?.name || '—'}</span>
+            </>
+          )}
+          dateOf={(c) => c.date}
+        />
+        <RecentColumn
+          title="Loans Received"
+          to="/receipts?type=loan"
+          items={recent.loans}
+          render={(l) => (
+            <>
+              <span className="font-mono text-mint">{formatCurrency(l.amount)}</span>
+              <span className="ml-2 font-sans text-navy/60">{l.lender || '—'}</span>
+            </>
+          )}
+          dateOf={(l) => l.date}
+        />
       </div>
 
       {/* Trends */}
@@ -207,20 +256,24 @@ export default function DashboardPage() {
             <thead>
               <tr className="border-b border-navy/10 font-mono text-xs uppercase tracking-wider text-navy/50">
                 <th className="px-4 py-3">Month</th>
-                <th className="px-4 py-3 text-right">Payments</th>
-                <th className="px-4 py-3 text-right">Other Income</th>
-                <th className="px-4 py-3 text-right">Expenses</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trends.map((t) => (
-                <tr key={t.period} className="border-b border-navy/5">
-                  <td className="px-4 py-3 font-mono text-sm text-navy">{t.period}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.payments)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.income)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-orange">{formatCurrency(t.expenses)}</td>
-                </tr>
-              ))}
+                 <th className="px-4 py-3 text-right">Payments</th>
+                 <th className="px-4 py-3 text-right">Other Income</th>
+                 <th className="px-4 py-3 text-right">Expenses</th>
+                 <th className="px-4 py-3 text-right">Capital</th>
+                 <th className="px-4 py-3 text-right">Loans</th>
+               </tr>
+             </thead>
+             <tbody>
+               {trends.map((t) => (
+                 <tr key={t.period} className="border-b border-navy/5">
+                   <td className="px-4 py-3 font-mono text-sm text-navy">{t.period}</td>
+                   <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.payments)}</td>
+                   <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.income)}</td>
+                   <td className="px-4 py-3 text-right font-mono text-sm text-orange">{formatCurrency(t.expenses)}</td>
+                   <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.capital)}</td>
+                   <td className="px-4 py-3 text-right font-mono text-sm text-mint">{formatCurrency(t.loans)}</td>
+                 </tr>
+               ))}
             </tbody>
           </table>
         </div>

@@ -71,116 +71,116 @@ const CUSTOMERS = [
 // =====================================================================
 const PLOTS = [
   // ---- Available (unassigned) ----
-  { plotNumber: 'P-001', area: 1200, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 500000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Corner plot, road-facing.' },
-  { plotNumber: 'P-002', area: 1000, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 450000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Near park.' },
-  { plotNumber: 'P-003', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 650000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Large plot.' },
-  { plotNumber: 'P-004', area: 900,  areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 420000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Standard size.' },
-  { plotNumber: 'P-005', area: 1100, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 480000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'East-facing.' },
-  { plotNumber: 'P-006', area: 1300, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 550000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Corner.' },
-  { plotNumber: 'P-007', area: 1000, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 460000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Mid-row.' },
-  { plotNumber: 'P-008', area: 1400, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 600000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Premium location.' },
-  { plotNumber: 'P-009', area: 800,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 380000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Compact plot.' },
-  { plotNumber: 'P-010', area: 1200, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 520000, agreementAmount: null, status: 'Available', customerKey: null, notes: 'Garden-facing.' },
+  { plotNumber: 'P-001', area: 1200, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 500000, status: 'Available', customerKey: null, notes: 'Corner plot, road-facing.' },
+  { plotNumber: 'P-002', area: 1000, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 450000, status: 'Available', customerKey: null, notes: 'Near park.' },
+  { plotNumber: 'P-003', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 650000, status: 'Available', customerKey: null, notes: 'Large plot.' },
+  { plotNumber: 'P-004', area: 900,  areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 420000, status: 'Available', customerKey: null, notes: 'Standard size.' },
+  { plotNumber: 'P-005', area: 1100, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 480000, status: 'Available', customerKey: null, notes: 'East-facing.' },
+  { plotNumber: 'P-006', area: 1300, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 550000, status: 'Available', customerKey: null, notes: 'Corner.' },
+  { plotNumber: 'P-007', area: 1000, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 460000, status: 'Available', customerKey: null, notes: 'Mid-row.' },
+  { plotNumber: 'P-008', area: 1400, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 600000, status: 'Available', customerKey: null, notes: 'Premium location.' },
+  { plotNumber: 'P-009', area: 800,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 380000, status: 'Available', customerKey: null, notes: 'Compact plot.' },
+  { plotNumber: 'P-010', area: 1200, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 520000, status: 'Available', customerKey: null, notes: 'Garden-facing.' },
 
-  // ---- Reserved (assigned, customerId + agreementAmount, mostly no payments yet) ----
-  { plotNumber: 'P-011', area: 1000, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 600000, agreementAmount: 600000, status: 'Reserved', customerKey: 'c3', notes: 'Reserved on token, payments pending.', payments: [] },
-  { plotNumber: 'P-012', area: 950,  areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 560000, agreementAmount: 550000, status: 'Reserved', customerKey: 'c8', notes: 'Negotiated ₹10,000 discount.', payments: [] },
-  { plotNumber: 'P-013', area: 1200, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 720000, agreementAmount: 700000, status: 'Reserved', customerKey: 'c14', notes: 'Discount agreed.', payments: [] },
-  { plotNumber: 'P-014', area: 800,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 460000, agreementAmount: 450000, status: 'Reserved', customerKey: 'c16', notes: 'Awaiting loan.', payments: [] },
-  { plotNumber: 'P-015', area: 1400, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 820000, agreementAmount: 800000, status: 'Reserved', customerKey: 'c18', notes: 'Premium discount.', payments: [] },
-  { plotNumber: 'P-016', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 920000, agreementAmount: 900000, status: 'Reserved', customerKey: 'c4', notes: 'One token payment received.', payments: [
+  // ---- Reserved (assigned, customerId + negotiated price, mostly no payments yet) ----
+  { plotNumber: 'P-011', area: 1000, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 600000, status: 'Reserved', customerKey: 'c3', notes: 'Reserved on token, payments pending.', payments: [] },
+  { plotNumber: 'P-012', area: 950,  areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 550000, status: 'Reserved', customerKey: 'c8', notes: 'Negotiated ₹10,000 discount.', payments: [] },
+  { plotNumber: 'P-013', area: 1200, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 700000, status: 'Reserved', customerKey: 'c14', notes: 'Discount agreed.', payments: [] },
+  { plotNumber: 'P-014', area: 800,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 450000, status: 'Reserved', customerKey: 'c16', notes: 'Awaiting loan.', payments: [] },
+  { plotNumber: 'P-015', area: 1400, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 800000, status: 'Reserved', customerKey: 'c18', notes: 'Premium discount.', payments: [] },
+  { plotNumber: 'P-016', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 900000, status: 'Reserved', customerKey: 'c4', notes: 'One token payment received.', payments: [
     { date: '2024-06-15', amount: 100000, method: 'UPI', reference: 'UPI-2024-0615', notes: 'Token amount' },
   ] },
-  { plotNumber: 'P-017', area: 1100, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 670000, agreementAmount: 650000, status: 'Reserved', customerKey: 'c6', notes: 'Discount agreed.', payments: [] },
-  { plotNumber: 'P-018', area: 900,  areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 510000, agreementAmount: 500000, status: 'Reserved', customerKey: 'c11', notes: 'Paperwork pending.', payments: [] },
+  { plotNumber: 'P-017', area: 1100, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 650000, status: 'Reserved', customerKey: 'c6', notes: 'Discount agreed.', payments: [] },
+  { plotNumber: 'P-018', area: 900,  areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 500000, status: 'Reserved', customerKey: 'c11', notes: 'Paperwork pending.', payments: [] },
 
   // ---- Allocated (assigned, partial payments) ----
-  { plotNumber: 'P-019', area: 1200, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 760000, agreementAmount: 750000, status: 'Allocated', customerKey: 'c1', notes: 'One installment paid.', payments: [
+  { plotNumber: 'P-019', area: 1200, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 750000, status: 'Allocated', customerKey: 'c1', notes: 'One installment paid.', payments: [
     { date: '2024-02-10', amount: 200000, method: 'Bank Transfer', reference: 'NEFT-AB12', notes: 'First installment' },
   ] },
-  { plotNumber: 'P-020', area: 1300, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 820000, agreementAmount: 800000, status: 'Allocated', customerKey: 'c1', notes: 'Two installments paid.', payments: [
+  { plotNumber: 'P-020', area: 1300, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 800000, status: 'Allocated', customerKey: 'c1', notes: 'Two installments paid.', payments: [
     { date: '2023-11-20', amount: 200000, method: 'Cash', reference: 'CSH-2023-1120', notes: 'Cash installment' },
     { date: '2024-03-15', amount: 150000, method: 'Cheque', reference: 'CHQ-4451', notes: 'Cheque installment' },
   ] },
-  { plotNumber: 'P-021', area: 1600, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 1020000, agreementAmount: 1000000, status: 'Allocated', customerKey: 'c2', notes: 'Three installments paid.', payments: [
+  { plotNumber: 'P-021', area: 1600, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 1000000, status: 'Allocated', customerKey: 'c2', notes: 'Three installments paid.', payments: [
     { date: '2023-09-05', amount: 300000, method: 'UPI', reference: 'UPI-2023-0905', notes: 'First' },
     { date: '2024-01-12', amount: 200000, method: 'Bank Transfer', reference: 'NEFT-CD34', notes: 'Second' },
     { date: '2024-05-20', amount: 150000, method: 'Cash', reference: 'CSH-2024-0520', notes: 'Third' },
   ] },
-  { plotNumber: 'P-022', area: 900,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 510000, agreementAmount: 500000, status: 'Allocated', customerKey: 'c5', notes: 'One installment paid.', payments: [
+  { plotNumber: 'P-022', area: 900,  areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 500000, status: 'Allocated', customerKey: 'c5', notes: 'One installment paid.', payments: [
     { date: '2024-04-18', amount: 150000, method: 'UPI', reference: 'UPI-2024-0418', notes: 'First' },
   ] },
-  { plotNumber: 'P-023', area: 1900, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1220000, agreementAmount: 1200000, status: 'Allocated', customerKey: 'c7', notes: 'Nearly fully paid.', payments: [
+  { plotNumber: 'P-023', area: 1900, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1200000, status: 'Allocated', customerKey: 'c7', notes: 'Nearly fully paid.', payments: [
     { date: '2023-10-10', amount: 600000, method: 'Bank Transfer', reference: 'NEFT-EF56', notes: 'First' },
     { date: '2024-02-28', amount: 500000, method: 'Cheque', reference: 'CHQ-7782', notes: 'Second' },
   ] },
-  { plotNumber: 'P-024', area: 1000, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 610000, agreementAmount: 600000, status: 'Allocated', customerKey: 'c9', notes: 'Two installments paid.', payments: [
+  { plotNumber: 'P-024', area: 1000, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 600000, status: 'Allocated', customerKey: 'c9', notes: 'Two installments paid.', payments: [
     { date: '2024-01-22', amount: 250000, method: 'Cash', reference: 'CSH-2024-0122', notes: 'First' },
     { date: '2024-06-30', amount: 150000, method: 'UPI', reference: 'UPI-2024-0630', notes: 'Second' },
   ] },
-  { plotNumber: 'P-025', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 920000, agreementAmount: 900000, status: 'Allocated', customerKey: 'c10', notes: 'One installment paid.', payments: [
+  { plotNumber: 'P-025', area: 1500, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 900000, status: 'Allocated', customerKey: 'c10', notes: 'One installment paid.', payments: [
     { date: '2023-12-05', amount: 300000, method: 'Bank Transfer', reference: 'NEFT-GH78', notes: 'First' },
   ] },
-  { plotNumber: 'P-026', area: 1200, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 710000, agreementAmount: 700000, status: 'Allocated', customerKey: 'c12', notes: 'Two installments paid.', payments: [
+  { plotNumber: 'P-026', area: 1200, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 700000, status: 'Allocated', customerKey: 'c12', notes: 'Two installments paid.', payments: [
     { date: '2024-03-08', amount: 150000, method: 'UPI', reference: 'UPI-2024-0308', notes: 'First' },
     { date: '2024-07-14', amount: 100000, method: 'Cash', reference: 'CSH-2024-0714', notes: 'Second' },
   ] },
-  { plotNumber: 'P-027', area: 1800, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1120000, agreementAmount: 1100000, status: 'Allocated', customerKey: 'c13', notes: 'Two installments paid.', payments: [
+  { plotNumber: 'P-027', area: 1800, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1100000, status: 'Allocated', customerKey: 'c13', notes: 'Two installments paid.', payments: [
     { date: '2023-08-19', amount: 300000, method: 'Cheque', reference: 'CHQ-2210', notes: 'First' },
     { date: '2024-04-25', amount: 200000, method: 'Bank Transfer', reference: 'NEFT-IJ90', notes: 'Second' },
   ] },
-  { plotNumber: 'P-028', area: 1400, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 860000, agreementAmount: 850000, status: 'Allocated', customerKey: 'c15', notes: 'First payment pending.', payments: [] },
-  { plotNumber: 'P-029', area: 1100, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 660000, agreementAmount: 650000, status: 'Allocated', customerKey: 'c17', notes: 'Fully paid in single installment.', payments: [
+  { plotNumber: 'P-028', area: 1400, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 850000, status: 'Allocated', customerKey: 'c15', notes: 'First payment pending.', payments: [] },
+  { plotNumber: 'P-029', area: 1100, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 650000, status: 'Allocated', customerKey: 'c17', notes: 'Fully paid in single installment.', payments: [
     { date: '2024-05-11', amount: 650000, method: 'Bank Transfer', reference: 'NEFT-KL01', notes: 'Full payment' },
   ] },
-  { plotNumber: 'P-030', area: 950,  areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 560000, agreementAmount: 550000, status: 'Allocated', customerKey: 'c2', notes: 'One installment paid.', payments: [
+  { plotNumber: 'P-030', area: 950,  areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 550000, status: 'Allocated', customerKey: 'c2', notes: 'One installment paid.', payments: [
     { date: '2024-02-02', amount: 100000, method: 'Cash', reference: 'CSH-2024-0202', notes: 'First' },
   ] },
 
   // ---- Sold (assigned, fully or nearly fully paid) ----
-  { plotNumber: 'P-031', area: 1600, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 1020000, agreementAmount: 1000000, status: 'Sold', customerKey: 'c1', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-031', area: 1600, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 1000000, status: 'Sold', customerKey: 'c1', notes: 'Fully paid.', payments: [
     { date: '2023-07-01', amount: 400000, method: 'Bank Transfer', reference: 'NEFT-MN12', notes: 'First' },
     { date: '2023-10-15', amount: 300000, method: 'UPI', reference: 'UPI-2023-1015', notes: 'Second' },
     { date: '2024-01-30', amount: 300000, method: 'Cheque', reference: 'CHQ-3394', notes: 'Final' },
   ] },
-  { plotNumber: 'P-032', area: 1900, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1220000, agreementAmount: 1200000, status: 'Sold', customerKey: 'c2', notes: 'Fully paid in four installments.', payments: [
+  { plotNumber: 'P-032', area: 1900, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1200000, status: 'Sold', customerKey: 'c2', notes: 'Fully paid in four installments.', payments: [
     { date: '2023-06-12', amount: 300000, method: 'Cash', reference: 'CSH-2023-0612', notes: 'First' },
     { date: '2023-09-20', amount: 300000, method: 'UPI', reference: 'UPI-2023-0920', notes: 'Second' },
     { date: '2024-01-10', amount: 300000, method: 'Bank Transfer', reference: 'NEFT-OP23', notes: 'Third' },
     { date: '2024-04-05', amount: 300000, method: 'Cheque', reference: 'CHQ-5567', notes: 'Final' },
   ] },
-  { plotNumber: 'P-033', area: 1500, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 920000, agreementAmount: 900000, status: 'Sold', customerKey: 'c5', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-033', area: 1500, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 900000, status: 'Sold', customerKey: 'c5', notes: 'Fully paid.', payments: [
     { date: '2023-11-02', amount: 500000, method: 'Bank Transfer', reference: 'NEFT-QR34', notes: 'First' },
     { date: '2024-03-19', amount: 400000, method: 'Cash', reference: 'CSH-2024-0319', notes: 'Final' },
   ] },
-  { plotNumber: 'P-034', area: 2400, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 1520000, agreementAmount: 1500000, status: 'Sold', customerKey: 'c7', notes: 'Nearly fully paid (₹1,00,000 outstanding).', payments: [
+  { plotNumber: 'P-034', area: 2400, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 1500000, status: 'Sold', customerKey: 'c7', notes: 'Nearly fully paid (₹1,00,000 outstanding).', payments: [
     { date: '2023-08-08', amount: 600000, method: 'Bank Transfer', reference: 'NEFT-ST45', notes: 'First' },
     { date: '2024-01-25', amount: 500000, method: 'Cheque', reference: 'CHQ-6678', notes: 'Second' },
     { date: '2024-06-10', amount: 300000, method: 'UPI', reference: 'UPI-2024-0610', notes: 'Third' },
   ] },
-  { plotNumber: 'P-035', area: 1200, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 760000, agreementAmount: 750000, status: 'Sold', customerKey: 'c9', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-035', area: 1200, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 750000, status: 'Sold', customerKey: 'c9', notes: 'Fully paid.', payments: [
     { date: '2024-02-14', amount: 400000, method: 'Cash', reference: 'CSH-2024-0214', notes: 'First' },
     { date: '2024-07-22', amount: 350000, method: 'Bank Transfer', reference: 'NEFT-UV56', notes: 'Final' },
   ] },
-  { plotNumber: 'P-036', area: 1300, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 820000, agreementAmount: 800000, status: 'Sold', customerKey: 'c10', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-036', area: 1300, areaUnit: 'sq.yd', location: 'DS Sai Enclave, Phase 2, Hyderabad', price: 800000, status: 'Sold', customerKey: 'c10', notes: 'Fully paid.', payments: [
     { date: '2023-10-30', amount: 300000, method: 'UPI', reference: 'UPI-2023-1030', notes: 'First' },
     { date: '2024-02-18', amount: 300000, method: 'Bank Transfer', reference: 'NEFT-WX67', notes: 'Second' },
     { date: '2024-08-05', amount: 200000, method: 'Cash', reference: 'CSH-2024-0805', notes: 'Final' },
   ] },
-  { plotNumber: 'P-037', area: 1000, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 610000, agreementAmount: 600000, status: 'Sold', customerKey: 'c12', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-037', area: 1000, areaUnit: 'sq.yd', location: 'DS Heritage Park, Chennai', price: 600000, status: 'Sold', customerKey: 'c12', notes: 'Fully paid.', payments: [
     { date: '2024-03-28', amount: 350000, method: 'Cheque', reference: 'CHQ-7781', notes: 'First' },
     { date: '2024-09-12', amount: 250000, method: 'Bank Transfer', reference: 'NEFT-YZ78', notes: 'Final' },
   ] },
-  { plotNumber: 'P-038', area: 2100, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1320000, agreementAmount: 1300000, status: 'Sold', customerKey: 'c13', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-038', area: 2100, areaUnit: 'sq.yd', location: 'DS Royal Gardens, Mysuru', price: 1300000, status: 'Sold', customerKey: 'c13', notes: 'Fully paid.', payments: [
     { date: '2023-09-15', amount: 500000, method: 'Bank Transfer', reference: 'NEFT-AB90', notes: 'First' },
     { date: '2024-02-22', amount: 400000, method: 'UPI', reference: 'UPI-2024-0222', notes: 'Second' },
     { date: '2024-07-30', amount: 400000, method: 'Cheque', reference: 'CHQ-8890', notes: 'Final' },
   ] },
-  { plotNumber: 'P-039', area: 1700, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 1070000, agreementAmount: 1050000, status: 'Sold', customerKey: 'c15', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-039', area: 1700, areaUnit: 'sq.yd', location: 'DS Green Valley, Sector 1, Bengaluru', price: 1050000, status: 'Sold', customerKey: 'c15', notes: 'Fully paid.', payments: [
     { date: '2024-01-05', amount: 600000, method: 'Cash', reference: 'CSH-2024-0105', notes: 'First' },
     { date: '2024-06-18', amount: 450000, method: 'Bank Transfer', reference: 'NEFT-CD01', notes: 'Final' },
   ] },
-  { plotNumber: 'P-040', area: 1500, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 970000, agreementAmount: 950000, status: 'Sold', customerKey: 'c17', notes: 'Fully paid.', payments: [
+  { plotNumber: 'P-040', area: 1500, areaUnit: 'sq.yd', location: 'DS Sunrise Layout, Pune', price: 950000, status: 'Sold', customerKey: 'c17', notes: 'Fully paid.', payments: [
     { date: '2023-12-20', amount: 400000, method: 'UPI', reference: 'UPI-2023-1220', notes: 'First' },
     { date: '2024-04-15', amount: 300000, method: 'Cheque', reference: 'CHQ-9901', notes: 'Second' },
     { date: '2024-09-28', amount: 250000, method: 'Bank Transfer', reference: 'NEFT-EF02', notes: 'Final' },
@@ -373,12 +373,11 @@ async function verify() {
   const available = plots.filter((p) => p.status === 'Available');
   for (const p of available) {
     if (p.customerId) errors.push(`Available plot ${p.plotNumber} has a customerId.`);
-    if (p.agreementAmount !== null) errors.push(`Available plot ${p.plotNumber} has agreementAmount.`);
   }
   const assigned = plots.filter((p) => p.status !== 'Available');
   for (const p of assigned) {
     if (!p.customerId) errors.push(`Assigned plot ${p.plotNumber} (${p.status}) has no customerId.`);
-    if (p.agreementAmount === null) errors.push(`Assigned plot ${p.plotNumber} (${p.status}) has null agreementAmount.`);
+    if (p.price === null || p.price === undefined) errors.push(`Assigned plot ${p.plotNumber} (${p.status}) has no price.`);
   }
 
   // Payments
@@ -396,22 +395,23 @@ async function verify() {
     if (!plot.customerId) {
       errors.push(`Payment ${pay._id} belongs to unassigned plot ${plot.plotNumber}.`);
     }
-    if (plot.agreementAmount === null) {
-      errors.push(`Payment ${pay._id} belongs to plot ${plot.plotNumber} with no agreementAmount.`);
+    if (plot.price === null || plot.price === undefined) {
+      errors.push(`Payment ${pay._id} belongs to plot ${plot.plotNumber} with no price.`);
     }
     paidByPlot[plot._id.toString()] = (paidByPlot[plot._id.toString()] || 0) + Number(pay.amount.toString());
   }
 
-  // Overpayment check
+  // Overpayment check (only assigned plots carry receivables)
   let totalOutstanding = 0;
   for (const plot of plots) {
-    if (plot.agreementAmount === null) continue;
+    if (!plot.customerId) continue;
+    if (plot.price === null || plot.price === undefined) continue;
     const paid = paidByPlot[plot._id.toString()] || 0;
-    const agreement = Number(plot.agreementAmount.toString());
-    if (paid > agreement + 1e-9) {
-      errors.push(`Plot ${plot.plotNumber} is overpaid (paid ${paid} > agreement ${agreement}).`);
+    const price = Number(plot.price.toString());
+    if (paid > price + 1e-9) {
+      errors.push(`Plot ${plot.plotNumber} is overpaid (paid ${paid} > price ${price}).`);
     }
-    totalOutstanding += Math.max(0, agreement - paid);
+    totalOutstanding += Math.max(0, price - paid);
   }
 
   // Expenses

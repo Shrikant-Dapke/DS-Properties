@@ -11,7 +11,6 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
     areaUnit: '',
     location: '',
     price: '',
-    agreementAmount: '',
     status: 'Available',
     customerId: '',
     notes: '',
@@ -31,7 +30,6 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
     const payload = {
       plotNumber: form.plotNumber,
       price: form.price,
-      agreementAmount: form.agreementAmount || null,
       status: form.status,
       customerId: form.customerId || null,
     };
@@ -91,7 +89,7 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
       </Field>
 
       <div className="flex gap-4">
-        <Field label="Price" htmlFor="price" required className="flex-1">
+        <Field label="Plot Price" htmlFor="price" required className="flex-1">
           <input
             id="price"
             type="number"
@@ -100,16 +98,6 @@ export default function PlotForm({ initialValues, customers, onSubmit, submittin
             value={form.price}
             onChange={(e) => set('price', e.target.value)}
             required
-          />
-        </Field>
-        <Field label="Agreement Amount" htmlFor="agreementAmount" className="flex-1">
-          <input
-            id="agreementAmount"
-            type="number"
-            step="any"
-            className={inputClass}
-            value={form.agreementAmount}
-            onChange={(e) => set('agreementAmount', e.target.value)}
           />
         </Field>
       </div>

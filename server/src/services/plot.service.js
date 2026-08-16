@@ -10,7 +10,6 @@ const ALLOWED = [
   'areaUnit',
   'location',
   'price',
-  'agreementAmount',
   'status',
   'customerId',
   'notes',
@@ -56,20 +55,6 @@ export async function createPlot(body) {
     throw new AppError('Invalid price', 400);
   }
   data.price = priceDecimal;
-
-  if (
-    body.agreementAmount !== undefined &&
-    body.agreementAmount !== null &&
-    String(body.agreementAmount).trim() !== ''
-  ) {
-    try {
-      data.agreementAmount = fromDecimal(body.agreementAmount);
-    } catch {
-      throw new AppError('Invalid agreement amount', 400);
-    }
-  } else {
-    data.agreementAmount = null;
-  }
 
   if (body.customerId) {
     data.customerId = await resolveCustomer(body.customerId);
@@ -143,17 +128,6 @@ export async function updatePlot(id, body) {
       data.price = fromDecimal(data.price);
     } catch {
       throw new AppError('Invalid price', 400);
-    }
-  }
-  if (data.agreementAmount !== undefined) {
-    if (data.agreementAmount === null || data.agreementAmount === '') {
-      data.agreementAmount = null;
-    } else {
-      try {
-        data.agreementAmount = fromDecimal(data.agreementAmount);
-      } catch {
-        throw new AppError('Invalid agreement amount', 400);
-      }
     }
   }
 
