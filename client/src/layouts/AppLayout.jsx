@@ -55,7 +55,7 @@ export default function AppLayout() {
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <span className="hidden font-mono text-xs uppercase tracking-widest text-lavender sm:inline">
-              {user?.name || 'Admin'}
+              {user?.name || 'User'}
             </span>
             <button
               onClick={onLogout}

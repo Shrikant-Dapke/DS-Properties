@@ -40,7 +40,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-lg bg-chalk p-8 shadow-lg">
         <h1 className="mb-1 font-display text-2xl text-navy">DS Properties</h1>
         <p className="mb-6 font-mono text-xs uppercase tracking-widest text-lavender">
-          Admin Sign In
+          Sign In
         </p>
 
         {error && (

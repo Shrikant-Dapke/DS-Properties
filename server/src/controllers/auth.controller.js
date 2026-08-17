@@ -3,8 +3,8 @@ import * as authService from '../services/auth.service.js';
 
 export async function login(req, res, next) {
   try {
-    const { token, admin } = await authService.login(req.body);
-    success(res, { token, admin }, 'Login successful');
+    const { token, user } = await authService.login(req.body);
+    success(res, { token, user }, 'Login successful');
   } catch (err) {
     next(err);
   }
@@ -12,7 +12,7 @@ export async function login(req, res, next) {
 
 export async function me(req, res, next) {
   try {
-    success(res, req.user, 'Admin profile');
+    success(res, req.user, 'User profile');
   } catch (err) {
     next(err);
   }

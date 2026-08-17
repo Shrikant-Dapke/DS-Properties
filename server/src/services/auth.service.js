@@ -1,4 +1,4 @@
-import Admin from '../models/Admin.js';
+import User from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
 import { AppError } from '../utils/errors.js';
 
@@ -7,24 +7,30 @@ export async function login({ username, password }) {
     throw new AppError('Username and password are required', 400);
   }
 
-  const admin = await Admin.findOne({ username: username.toLowerCase() });
+  const user = await User.findOne({ username: username.toLowerCase() });
 
-  if (!admin || !admin.active) {
+  if (!user || !user.active) {
     throw new AppError('Invalid credentials', 401);
   }
 
-  const valid = await admin.verifyPassword(password);
+  const valid = await user.verifyPassword(password);
   if (!valid) {
     throw new AppError('Invalid credentials', 401);
   }
 
-  admin.lastLoginAt = new Date();
-  await admin.save();
+  user.lastLoginAt = new Date();
+  await user.save();
 
-  const token = signToken({
-    sub: admin._id.toString(),
-    role: admin.role,
-  });
+  const payload = {
+    sub: user._id.toString(),
+    role: user.role,
+  };
+  // Include the linked Partner id for partner users (handy for downstream checks).
+  if (user.role === 'partner' && user.partnerId) {
+    payload.pid = user.partnerId.toString();
+  }
 
-  return { token, admin };
+  const token = signToken(payload);
+
+  return { token, user };
 }

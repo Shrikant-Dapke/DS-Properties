@@ -1,5 +1,5 @@
 import { verifyToken } from '../utils/jwt.js';
-import Admin from '../models/Admin.js';
+import User from '../models/User.js';
 import { AppError } from '../utils/errors.js';
 
 export async function authenticate(req, res, next) {
@@ -12,13 +12,17 @@ export async function authenticate(req, res, next) {
     }
 
     const decoded = verifyToken(token);
-    const admin = await Admin.findById(decoded.sub || decoded.id);
+    const user = await User.findById(decoded.sub || decoded.id);
 
-    if (!admin || !admin.active) {
+    if (!user || !user.active) {
       throw new AppError('Account not found or inactive', 401);
     }
 
-    req.user = admin;
+    // Authoritative identity — never trust a client-supplied role.
+    req.user = user;
+    req.userId = user._id.toString();
+    req.role = user.role;
+
     next();
   } catch (err) {
     if (err instanceof AppError) return next(err);

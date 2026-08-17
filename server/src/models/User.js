@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-const adminSchema = new mongoose.Schema(
+const ROLES = ['developer', 'partner', 'admin'];
+
+const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
@@ -19,22 +21,30 @@ const adminSchema = new mongoose.Schema(
     },
     passwordHash: { type: String, required: true },
     name: { type: String, trim: true },
-    role: { type: String, enum: ['admin'], default: 'admin' },
+    role: { type: String, enum: ROLES, required: true },
+    partnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Partner',
+      default: null,
+    },
     active: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null },
+    preferredLocale: { type: String, enum: ['en', 'mr'], default: 'en' },
   },
   { timestamps: true }
 );
 
-adminSchema.methods.verifyPassword = function (candidate) {
+userSchema.index({ partnerId: 1 });
+
+userSchema.methods.verifyPassword = function (candidate) {
   return bcrypt.compare(candidate, this.passwordHash);
 };
 
-adminSchema.methods.toJSON = function () {
+userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.passwordHash;
   delete obj.__v;
   return obj;
 };
 
-export default mongoose.model('Admin', adminSchema);
+export default mongoose.model('User', userSchema);

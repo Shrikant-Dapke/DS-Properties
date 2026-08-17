@@ -39,11 +39,11 @@ export function AuthProvider({ children }) {
 
   async function login(username, password) {
     const res = await authApi.login(username, password);
-    const { token: t, admin } = res.data.data;
+    const { token: t, user: u } = res.data.data;
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
-    setUser(admin);
-    return admin;
+    setUser(u);
+    return u;
   }
 
   function logout() {
@@ -52,11 +52,22 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  // Role helpers — UI/routing only. Authorization is enforced by the backend.
+  const role = user?.role || null;
+  const value = {
+    user,
+    token,
+    loading,
+    login,
+    logout,
+    role,
+    id: user?._id || null,
+    isDeveloper: role === 'developer',
+    isPartner: role === 'partner',
+    isAdmin: role === 'admin',
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
