@@ -29,6 +29,9 @@ import PartnerDetailPage from './pages/PartnerDetailPage.jsx';
 import PartnerEditPage from './pages/PartnerEditPage.jsx';
 import ReceiptsPage from './pages/ReceiptsPage.jsx';
 import RecordReceiptPage from './pages/RecordReceiptPage.jsx';
+import FinancePage from './pages/FinancePage.jsx';
+import ApprovalsPage from './pages/ApprovalsPage.jsx';
+import ApprovalDetailPage from './pages/ApprovalDetailPage.jsx';
 import { RequireAuth } from './routes/RequireAuth.jsx';
 
 export default function App() {
@@ -69,6 +72,9 @@ export default function App() {
         <Route path="/partners/:id/edit" element={<PartnerEditPage />} />
         <Route path="/receipts" element={<ReceiptsPage />} />
         <Route path="/receipts/new" element={<RecordReceiptPage />} />
+        <Route path="/finance" element={<FinancePage />} />
+        <Route path="/approvals" element={<ApprovalsPage />} />
+        <Route path="/approvals/:id" element={<ApprovalDetailPage />} />
         <Route path="/reports" element={<ReportsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

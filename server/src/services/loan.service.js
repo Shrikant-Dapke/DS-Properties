@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 import LoanReceived from '../models/LoanReceived.js';
+import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
 
 const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
@@ -39,16 +40,24 @@ export async function createLoan(body) {
   const amount = parseAmount(body.amount);
   const date = parseDate(body.date);
 
-  const loan = await LoanReceived.create({
-    lender: String(body.lender).trim(),
-    amount: toDecimal128(amount),
-    date,
-    method: METHODS.includes(body.method) ? body.method : 'Cash',
-    reference: body.reference || undefined,
-    notes: body.notes || undefined,
-  });
+  return runInTransaction(async (session) => {
+    const loan = await LoanReceived.create(
+      [
+        {
+          lender: String(body.lender).trim(),
+          amount: toDecimal128(amount),
+          date,
+          method: METHODS.includes(body.method) ? body.method : 'Cash',
+          reference: body.reference || undefined,
+          notes: body.notes || undefined,
+        },
+      ],
+      { session }
+    );
 
-  return loan;
+    await syncTransaction('LoanReceived', loan[0], { operation: 'create', session });
+    return loan;
+  });
 }
 
 export async function listLoans({ lender, dateFrom, dateTo, page = 1, limit = 20 } = {}) {
@@ -100,19 +109,23 @@ export async function getLoan(id) {
 
 export async function updateLoan(id, body) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new AppError('Invalid loan id', 400);
-  const loan = await LoanReceived.findById(id);
-  if (!loan) throw new AppError('Loan not found', 404);
 
-  if (body.lender !== undefined) {
-    if (!String(body.lender).trim()) throw new AppError('Lender / source is required', 400);
-    loan.lender = String(body.lender).trim();
-  }
-  if (body.amount !== undefined) loan.amount = toDecimal128(parseAmount(body.amount));
-  if (body.date !== undefined) loan.date = parseDate(body.date);
-  if (body.method !== undefined) loan.method = METHODS.includes(body.method) ? body.method : 'Cash';
-  if (body.reference !== undefined) loan.reference = body.reference;
-  if (body.notes !== undefined) loan.notes = body.notes;
+  return runInTransaction(async (session) => {
+    const loan = await LoanReceived.findById(id).session(session);
+    if (!loan) throw new AppError('Loan not found', 404);
 
-  await loan.save();
-  return loan;
+    if (body.lender !== undefined) {
+      if (!String(body.lender).trim()) throw new AppError('Lender / source is required', 400);
+      loan.lender = String(body.lender).trim();
+    }
+    if (body.amount !== undefined) loan.amount = toDecimal128(parseAmount(body.amount));
+    if (body.date !== undefined) loan.date = parseDate(body.date);
+    if (body.method !== undefined) loan.method = METHODS.includes(body.method) ? body.method : 'Cash';
+    if (body.reference !== undefined) loan.reference = body.reference;
+    if (body.notes !== undefined) loan.notes = body.notes;
+
+    await loan.save({ session });
+    await syncTransaction('LoanReceived', loan, { operation: 'update', session });
+    return loan;
+  });
 }

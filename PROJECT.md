@@ -108,10 +108,15 @@ Use:
 Default development connection uses the local single-node replica set `rs0` (required for MongoDB multi-document transactions used by the payments flow):
 
 ```text
-mongodb://127.0.0.1:27017/ds_properties?replicaSet=rs0
+mongodb://127.0.0.1:27018/ds_properties?replicaSet=rs0
 ```
 
-The DS Properties dev MongoDB runs as replica set `rs0` on the standard MongoDB port `27017`. Use this URI in `server/.env` (see `server/.env.example`).
+- Replica set: `rs0`
+- Port: `27018`
+- Data directory (dbPath): `C:\mongo-rs0`
+- Database: `ds_properties`
+
+The DS Properties dev MongoDB runs as the single-node replica set `rs0` on port `27018` (data directory `C:\mongo-rs0`). Use this URI in `server/.env` (see `server/.env.example`).
 
 Do not introduce MongoDB Atlas unless explicitly requested.
 

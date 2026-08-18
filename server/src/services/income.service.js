@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 import Income from '../models/Income.js';
 import Category from '../models/Category.js';
+import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
 
 function toDecimal128(value) {
@@ -51,16 +52,27 @@ export async function createIncome(body) {
   const date = parseDate(body.date);
   await validateIncomeCategory(body.categoryId, { requireActive: true });
 
-  const income = await Income.create({
-    amount: toDecimal128(amount),
-    date,
-    categoryId: body.categoryId,
-    description: body.description || undefined,
-    reference: body.reference || undefined,
-    notes: body.notes || undefined,
-  });
+  return runInTransaction(async (session) => {
+    const income = await Income.create(
+      [
+        {
+          amount: toDecimal128(amount),
+          date,
+          categoryId: body.categoryId,
+          description: body.description || undefined,
+          reference: body.reference || undefined,
+          notes: body.notes || undefined,
+        },
+      ],
+      { session }
+    );
 
-  return Income.findById(income._id).populate('categoryId', 'name type isSeed active');
+    const created = await Income.findById(income[0]._id)
+      .populate('categoryId', 'name type isSeed active')
+      .session(session);
+    await syncTransaction('Income', created, { operation: 'create', session });
+    return created;
+  });
 }
 
 export async function listIncome({
@@ -125,25 +137,32 @@ export async function getIncome(id) {
 
 export async function updateIncome(id, body) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new AppError('Invalid income id', 400);
-  const income = await Income.findById(id);
-  if (!income) throw new AppError('Income not found', 404);
 
-  if (body.amount !== undefined) {
-    const amount = parseAmount(body.amount);
-    income.amount = toDecimal128(amount);
-  }
-  if (body.date !== undefined) {
-    income.date = parseDate(body.date);
-  }
-  if (body.categoryId !== undefined && body.categoryId !== income.categoryId.toString()) {
-    // Changing the category requires an active income category.
-    await validateIncomeCategory(body.categoryId, { requireActive: true });
-    income.categoryId = body.categoryId;
-  }
-  if (body.description !== undefined) income.description = body.description;
-  if (body.reference !== undefined) income.reference = body.reference;
-  if (body.notes !== undefined) income.notes = body.notes;
+  return runInTransaction(async (session) => {
+    const income = await Income.findById(id).session(session);
+    if (!income) throw new AppError('Income not found', 404);
 
-  await income.save();
-  return Income.findById(income._id).populate('categoryId', 'name type isSeed active');
+    if (body.amount !== undefined) {
+      const amount = parseAmount(body.amount);
+      income.amount = toDecimal128(amount);
+    }
+    if (body.date !== undefined) {
+      income.date = parseDate(body.date);
+    }
+    if (body.categoryId !== undefined && body.categoryId !== income.categoryId.toString()) {
+      // Changing the category requires an active income category.
+      await validateIncomeCategory(body.categoryId, { requireActive: true });
+      income.categoryId = body.categoryId;
+    }
+    if (body.description !== undefined) income.description = body.description;
+    if (body.reference !== undefined) income.reference = body.reference;
+    if (body.notes !== undefined) income.notes = body.notes;
+
+    await income.save({ session });
+    const updated = await Income.findById(income._id)
+      .populate('categoryId', 'name type isSeed active')
+      .session(session);
+    await syncTransaction('Income', updated, { operation: 'update', session });
+    return updated;
+  });
 }

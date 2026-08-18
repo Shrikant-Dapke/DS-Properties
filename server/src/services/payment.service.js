@@ -3,6 +3,7 @@ import Decimal from 'decimal.js';
 import Payment from '../models/Payment.js';
 import Plot from '../models/Plot.js';
 import Customer from '../models/Customer.js';
+import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
 
 const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
@@ -45,54 +46,49 @@ export async function createPayment(body) {
   const date = new Date(body.date);
   if (isNaN(date.getTime())) throw new AppError('Invalid payment date', 400);
 
-  const session = await mongoose.startSession();
-  try {
-    const result = await session.withTransaction(async () => {
-      const customer = await Customer.findById(body.customerId).session(session);
-      if (!customer) throw new AppError('Customer not found', 400);
+  return runInTransaction(async (session) => {
+    const customer = await Customer.findById(body.customerId).session(session);
+    if (!customer) throw new AppError('Customer not found', 400);
 
-      const plot = await Plot.findById(body.plotId).session(session);
-      if (!plot) throw new AppError('Plot not found', 400);
+    const plot = await Plot.findById(body.plotId).session(session);
+    if (!plot) throw new AppError('Plot not found', 400);
 
-      if (!plot.customerId) {
-        throw new AppError('Cannot record payment for an unassigned plot', 400);
-      }
-      if (plot.customerId.toString() !== String(body.customerId)) {
-        throw new AppError('Payment customer does not match the plot customer', 400);
-      }
+    if (!plot.customerId) {
+      throw new AppError('Cannot record payment for an unassigned plot', 400);
+    }
+    if (plot.customerId.toString() !== String(body.customerId)) {
+      throw new AppError('Payment customer does not match the plot customer', 400);
+    }
 
-      const price = new Decimal(plot.price.toString());
-      const paid = await sumPlotPaid(plot._id, session);
-      const remaining = price.minus(paid);
+    const price = new Decimal(plot.price.toString());
+    const paid = await sumPlotPaid(plot._id, session);
+    const remaining = price.minus(paid);
 
-      if (amount.gt(remaining)) {
-        throw new AppError(
-          `Payment exceeds remaining outstanding of ${remaining.toString()}`,
-          409
-        );
-      }
-
-      const payment = await Payment.create(
-        [
-          {
-            customerId: plot.customerId,
-            plotId: plot._id,
-            amount: toDecimal128(amount),
-            date,
-            method: METHODS.includes(body.method) ? body.method : 'Cash',
-            reference: body.reference || undefined,
-            notes: body.notes || undefined,
-          },
-        ],
-        { session }
+    if (amount.gt(remaining)) {
+      throw new AppError(
+        `Payment exceeds remaining outstanding of ${remaining.toString()}`,
+        409
       );
+    }
 
-      return payment[0];
-    });
-    return result;
-  } finally {
-    await session.endSession();
-  }
+    const payment = await Payment.create(
+      [
+        {
+          customerId: plot.customerId,
+          plotId: plot._id,
+          amount: toDecimal128(amount),
+          date,
+          method: METHODS.includes(body.method) ? body.method : 'Cash',
+          reference: body.reference || undefined,
+          notes: body.notes || undefined,
+        },
+      ],
+      { session }
+    );
+
+    await syncTransaction('Payment', payment[0], { operation: 'create', session });
+    return payment[0];
+  });
 }
 
 export async function listPayments({

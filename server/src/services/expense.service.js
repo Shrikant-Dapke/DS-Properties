@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 import Expense from '../models/Expense.js';
 import Category from '../models/Category.js';
+import { syncTransaction, removeTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
 
 function toDecimal128(value) {
@@ -51,17 +52,28 @@ export async function createExpense(body) {
   const date = parseDate(body.date);
   await validateExpenseCategory(body.categoryId, { requireActive: true });
 
-  const expense = await Expense.create({
-    amount: toDecimal128(amount),
-    date,
-    categoryId: body.categoryId,
-    description: body.description || undefined,
-    reference: body.reference || undefined,
-    notes: body.notes || undefined,
-    deleted: false,
-  });
+  return runInTransaction(async (session) => {
+    const expense = await Expense.create(
+      [
+        {
+          amount: toDecimal128(amount),
+          date,
+          categoryId: body.categoryId,
+          description: body.description || undefined,
+          reference: body.reference || undefined,
+          notes: body.notes || undefined,
+          deleted: false,
+        },
+      ],
+      { session }
+    );
 
-  return Expense.findById(expense._id).populate('categoryId', 'name type isSeed active');
+    const created = await Expense.findById(expense[0]._id)
+      .populate('categoryId', 'name type isSeed active')
+      .session(session);
+    await syncTransaction('Expense', created, { operation: 'create', session });
+    return created;
+  });
 }
 
 export async function listExpenses({
@@ -133,34 +145,47 @@ export async function getExpense(id, { includeDeleted = false } = {}) {
 
 export async function updateExpense(id, body) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new AppError('Invalid expense id', 400);
-  const expense = await Expense.findById(id);
-  if (!expense) throw new AppError('Expense not found', 404);
 
-  if (body.amount !== undefined) {
-    const amount = parseAmount(body.amount);
-    expense.amount = toDecimal128(amount);
-  }
-  if (body.date !== undefined) {
-    expense.date = parseDate(body.date);
-  }
-  if (body.categoryId !== undefined && body.categoryId !== expense.categoryId.toString()) {
-    // Changing the category requires an active expense category.
-    await validateExpenseCategory(body.categoryId, { requireActive: true });
-    expense.categoryId = body.categoryId;
-  }
-  if (body.description !== undefined) expense.description = body.description;
-  if (body.reference !== undefined) expense.reference = body.reference;
-  if (body.notes !== undefined) expense.notes = body.notes;
+  return runInTransaction(async (session) => {
+    const expense = await Expense.findById(id).session(session);
+    if (!expense) throw new AppError('Expense not found', 404);
 
-  await expense.save();
-  return Expense.findById(expense._id).populate('categoryId', 'name type isSeed active');
+    if (body.amount !== undefined) {
+      const amount = parseAmount(body.amount);
+      expense.amount = toDecimal128(amount);
+    }
+    if (body.date !== undefined) {
+      expense.date = parseDate(body.date);
+    }
+    if (body.categoryId !== undefined && body.categoryId !== expense.categoryId.toString()) {
+      // Changing the category requires an active expense category.
+      await validateExpenseCategory(body.categoryId, { requireActive: true });
+      expense.categoryId = body.categoryId;
+    }
+    if (body.description !== undefined) expense.description = body.description;
+    if (body.reference !== undefined) expense.reference = body.reference;
+    if (body.notes !== undefined) expense.notes = body.notes;
+
+    await expense.save({ session });
+    const updated = await Expense.findById(expense._id)
+      .populate('categoryId', 'name type isSeed active')
+      .session(session);
+    await syncTransaction('Expense', updated, { operation: 'update', session });
+    return updated;
+  });
 }
 
 export async function softDeleteExpense(id) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new AppError('Invalid expense id', 400);
-  const expense = await Expense.findById(id);
-  if (!expense) throw new AppError('Expense not found', 404);
-  expense.deleted = true;
-  await expense.save();
-  return Expense.findById(expense._id).populate('categoryId', 'name type isSeed active');
+
+  return runInTransaction(async (session) => {
+    const expense = await Expense.findById(id).session(session);
+    if (!expense) throw new AppError('Expense not found', 404);
+    expense.deleted = true;
+    await expense.save({ session });
+    await removeTransaction('Expense', id, { session });
+    return Expense.findById(expense._id)
+      .populate('categoryId', 'name type isSeed active')
+      .session(session);
+  });
 }

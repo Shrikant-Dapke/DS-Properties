@@ -15,6 +15,9 @@ import expenseRoutes from './routes/expense.routes.js';
 import incomeRoutes from './routes/income.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import reportRoutes from './routes/report.routes.js';
+import changeRequestRoutes from './routes/changeRequest.routes.js';
+import approvalRoutes from './routes/approval.routes.js';
+import financeRoutes from './routes/finance.routes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -37,6 +40,9 @@ app.use('/api/expenses', expenseRoutes);
   app.use('/api/income', incomeRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/reports', reportRoutes);
+  app.use('/api/change-requests', changeRequestRoutes);
+  app.use('/api/approvals', approvalRoutes);
+  app.use('/api/finance', financeRoutes);
   app.use(errorHandler);
 
   return app;

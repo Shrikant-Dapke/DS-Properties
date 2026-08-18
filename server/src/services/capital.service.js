@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 import PartnerCapital from '../models/PartnerCapital.js';
 import Partner from '../models/Partner.js';
+import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
 
 const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
@@ -43,16 +44,27 @@ export async function createCapital(body) {
   const amount = parseAmount(body.amount);
   const date = parseDate(body.date);
 
-  const capital = await PartnerCapital.create({
-    partnerId: partner._id,
-    amount: toDecimal128(amount),
-    date,
-    method: METHODS.includes(body.method) ? body.method : 'Cash',
-    reference: body.reference || undefined,
-    notes: body.notes || undefined,
-  });
+  return runInTransaction(async (session) => {
+    const capital = await PartnerCapital.create(
+      [
+        {
+          partnerId: partner._id,
+          amount: toDecimal128(amount),
+          date,
+          method: METHODS.includes(body.method) ? body.method : 'Cash',
+          reference: body.reference || undefined,
+          notes: body.notes || undefined,
+        },
+      ],
+      { session }
+    );
 
-  return PartnerCapital.findById(capital._id).populate('partnerId', 'name');
+    const created = await PartnerCapital.findById(capital[0]._id)
+      .populate('partnerId', 'name')
+      .session(session);
+    await syncTransaction('PartnerCapital', created, { operation: 'create', session });
+    return created;
+  });
 }
 
 export async function listCapital({
@@ -123,21 +135,28 @@ export async function getCapital(id) {
 
 export async function updateCapital(id, body) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new AppError('Invalid capital id', 400);
-  const capital = await PartnerCapital.findById(id);
-  if (!capital) throw new AppError('Capital contribution not found', 404);
 
-  if (body.partnerId !== undefined && body.partnerId !== capital.partnerId.toString()) {
-    if (!mongoose.Types.ObjectId.isValid(body.partnerId)) throw new AppError('Valid partnerId is required', 400);
-    const partner = await Partner.findById(body.partnerId);
-    if (!partner) throw new AppError('Partner not found', 400);
-    capital.partnerId = partner._id;
-  }
-  if (body.amount !== undefined) capital.amount = toDecimal128(parseAmount(body.amount));
-  if (body.date !== undefined) capital.date = parseDate(body.date);
-  if (body.method !== undefined) capital.method = METHODS.includes(body.method) ? body.method : 'Cash';
-  if (body.reference !== undefined) capital.reference = body.reference;
-  if (body.notes !== undefined) capital.notes = body.notes;
+  return runInTransaction(async (session) => {
+    const capital = await PartnerCapital.findById(id).session(session);
+    if (!capital) throw new AppError('Capital contribution not found', 404);
 
-  await capital.save();
-  return PartnerCapital.findById(capital._id).populate('partnerId', 'name');
+    if (body.partnerId !== undefined && body.partnerId !== capital.partnerId.toString()) {
+      if (!mongoose.Types.ObjectId.isValid(body.partnerId)) throw new AppError('Valid partnerId is required', 400);
+      const partner = await Partner.findById(body.partnerId).session(session);
+      if (!partner) throw new AppError('Partner not found', 400);
+      capital.partnerId = partner._id;
+    }
+    if (body.amount !== undefined) capital.amount = toDecimal128(parseAmount(body.amount));
+    if (body.date !== undefined) capital.date = parseDate(body.date);
+    if (body.method !== undefined) capital.method = METHODS.includes(body.method) ? body.method : 'Cash';
+    if (body.reference !== undefined) capital.reference = body.reference;
+    if (body.notes !== undefined) capital.notes = body.notes;
+
+    await capital.save({ session });
+    const updated = await PartnerCapital.findById(capital._id)
+      .populate('partnerId', 'name')
+      .session(session);
+    await syncTransaction('PartnerCapital', updated, { operation: 'update', session });
+    return updated;
+  });
 }

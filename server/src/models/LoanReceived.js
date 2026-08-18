@@ -18,7 +18,6 @@ const loanReceivedSchema = new Schema(
   { timestamps: true }
 );
 
-loanReceivedSchema.index({ lender: 1 });
 loanReceivedSchema.index({ date: -1 });
 
 loanReceivedSchema.set('toJSON', {

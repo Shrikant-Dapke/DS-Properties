@@ -6,6 +6,9 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const role = user?.role;
+  const canViewApprovals = role === 'partner' || role === 'developer';
+
   function onLogout() {
     logout();
     navigate('/login', { replace: true });
@@ -48,6 +51,14 @@ export default function AppLayout() {
               <NavLink to="/reports" className={linkClass}>
                 Reports
               </NavLink>
+              <NavLink to="/finance" className={linkClass}>
+                Finance
+              </NavLink>
+              {canViewApprovals && (
+                <NavLink to="/approvals" className={linkClass}>
+                  Approvals
+                </NavLink>
+              )}
               <NavLink to="/categories" className={linkClass}>
                 Categories
               </NavLink>
