@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import PartnerForm from '../components/PartnerForm.jsx';
+import PartyForm from '../components/PartyForm.jsx';
 import * as partnerService from '../services/partner.service.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
@@ -34,7 +34,7 @@ export default function PartnerCreatePage() {
         Add a business partner. Track their capital contributions separately from customer payments and revenue.
       </p>
       <div className="mt-6">
-        <PartnerForm onSubmit={handleSubmit} submitting={submitting} error={error} />
+        <PartyForm showStatus submitLabel="Save Partner" onSubmit={handleSubmit} submitting={submitting} error={error} />
       </div>
     </section>
   );

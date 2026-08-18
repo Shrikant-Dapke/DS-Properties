@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as categoryService from '../services/category.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import Badge from '../components/Badge.jsx';
 import Card from '../components/Card.jsx';
 import Skeleton from '../components/Skeleton.jsx';
@@ -32,8 +33,12 @@ export default function CategoryPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: (item) => categoryService.deleteCategory(item._id),
+    successMessage: (item) => `Category "${item.name}" deleted.`,
+    errorMessage: 'Failed to delete category.',
+    onSuccess: (item) => setItems((prev) => prev.filter((c) => c._id !== item._id)),
+  });
 
   function load() {
     setLoading(true);
@@ -105,21 +110,6 @@ export default function CategoryPage() {
       setItems((prev) => prev.map((c) => (c._id === cat._id ? updated : c)));
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update category.'));
-    }
-  }
-
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      const name = pendingDelete.name;
-      await categoryService.deleteCategory(pendingDelete._id);
-      setItems((prev) => prev.filter((c) => c._id !== pendingDelete._id));
-      setPendingDelete(null);
-      toast.success(`Category "${name}" deleted.`);
-    } catch (err) {
-      setPendingDelete(null);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete category.'));
     }
   }
 
@@ -305,7 +295,7 @@ export default function CategoryPage() {
                       </button>
                       {!c.isSeed && (
                         <button
-                          onClick={() => setPendingDelete(c)}
+                          onClick={() => askDelete(c)}
                           className="ml-2 rounded border border-orange/40 px-2 py-1 font-sans text-xs text-orange transition-colors hover:bg-orange/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
                         >
                           Delete
@@ -324,7 +314,7 @@ export default function CategoryPage() {
         open={!!pendingDelete}
         name={pendingDelete ? pendingDelete.name : ''}
         busy={deleting}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

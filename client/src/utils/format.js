@@ -5,10 +5,6 @@ const currencyFormatter = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 2,
 });
 
-const numberFormatter = new Intl.NumberFormat('en-IN', {
-  maximumFractionDigits: 2,
-});
-
 function isEmpty(value) {
   return value === null || value === undefined || value === '';
 }
@@ -23,13 +19,6 @@ export function formatCurrency(value) {
   const n = toNumber(value);
   if (n === null) return '—';
   return currencyFormatter.format(n);
-}
-
-export function formatNumber(value) {
-  if (isEmpty(value)) return '—';
-  const n = toNumber(value);
-  if (n === null) return '—';
-  return numberFormatter.format(n);
 }
 
 export function formatDate(value) {

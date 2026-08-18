@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as plotService from '../services/plot.service.js';
 import * as customerService from '../services/customer.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Pagination from '../components/Pagination.jsx';
 import Badge from '../components/Badge.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
 
@@ -35,9 +36,12 @@ export default function PlotsListPage() {
   const [customer, setCustomer] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: (item) => plotService.deletePlot(item._id),
+    successMessage: 'Plot deleted successfully.',
+    errorMessage: 'Failed to delete plot.',
+    onSuccess: (item) => setPlots((prev) => prev.filter((p) => p._id !== item._id)),
+  });
 
   useEffect(() => {
     customerService
@@ -65,20 +69,6 @@ export default function PlotsListPage() {
       })
       .catch((err) => setError(getErrorMessage(err, 'Failed to load plots.')))
       .finally(() => setLoading(false));
-  }
-
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await plotService.deletePlot(pendingDelete._id);
-      setPlots((prev) => prev.filter((p) => p._id !== pendingDelete._id));
-      setPendingDelete(null);
-      toast.success('Plot deleted successfully.');
-    } catch (err) {
-      setPendingDelete(null);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete plot.'));
-    }
   }
 
   const activeCount = (search ? 1 : 0) + (status ? 1 : 0) + (customer ? 1 : 0);
@@ -215,27 +205,7 @@ export default function PlotsListPage() {
             </table>
           </div>
 
-          {pagination.totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-end gap-3 font-sans text-sm text-navy/60">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-              >
-                Prev
-              </button>
-              <span>
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <button
-                disabled={page >= pagination.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-              >
-                Next
-              </button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} className="justify-end" />
         </>
       )}
 
@@ -243,7 +213,7 @@ export default function PlotsListPage() {
         open={!!pendingDelete}
         name={pendingDelete ? `Plot ${pendingDelete.plotNumber}` : ''}
         busy={deleting}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

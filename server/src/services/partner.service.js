@@ -3,22 +3,15 @@ import Decimal from 'decimal.js';
 import Partner from '../models/Partner.js';
 import PartnerCapital from '../models/PartnerCapital.js';
 import { AppError } from '../utils/errors.js';
+import { pickFields, pageMeta } from '../utils/query.js';
 
 const ALLOWED_FIELDS = ['name', 'phone', 'email', 'address', 'notes', 'status'];
-
-function pickFields(body) {
-  const data = {};
-  for (const field of ALLOWED_FIELDS) {
-    if (body[field] !== undefined) data[field] = body[field];
-  }
-  return data;
-}
 
 export async function createPartner(body) {
   if (!body.name || !String(body.name).trim()) {
     throw new AppError('Partner name is required', 400);
   }
-  return Partner.create(pickFields(body));
+  return Partner.create(pickFields(body, ALLOWED_FIELDS));
 }
 
 export async function listPartners({ search, status, page = 1, limit = 20 } = {}) {
@@ -30,18 +23,18 @@ export async function listPartners({ search, status, page = 1, limit = 20 } = {}
     filter.$or = [{ name: regex }, { phone: regex }, { email: regex }];
   }
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-  const skip = (pageNum - 1) * limitNum;
+  const meta = pageMeta(page, limit, 0);
 
   const [items, total] = await Promise.all([
-    Partner.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Partner.find(filter).sort({ createdAt: -1 }).skip(meta.skip).limit(meta.limitNum),
     Partner.countDocuments(filter),
   ]);
+  meta.total = total;
+  meta.totalPages = Math.ceil(total / meta.limitNum);
 
   return {
     items,
-    pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+    pagination: { page: meta.page, limit: meta.limitNum, total: meta.total, totalPages: meta.totalPages },
   };
 }
 
@@ -55,7 +48,7 @@ export async function updatePartner(id, body) {
   const partner = await Partner.findById(id);
   if (!partner) throw new AppError('Partner not found', 404);
 
-  const data = pickFields(body);
+  const data = pickFields(body, ALLOWED_FIELDS);
   if (data.name !== undefined && !String(data.name).trim()) {
     throw new AppError('Partner name cannot be empty', 400);
   }

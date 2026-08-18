@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import CustomerForm from '../components/CustomerForm.jsx';
+import PartyForm from '../components/PartyForm.jsx';
 import Card from '../components/Card.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
@@ -30,7 +30,7 @@ export default function CustomerCreatePage() {
       </Link>
       <h1 className="mt-2 font-display text-3xl text-navy">New Customer</h1>
       <Card className="mt-6 p-6">
-        <CustomerForm onSubmit={handleSubmit} submitting={submitting} />
+        <PartyForm showStatus={false} submitLabel="Save Customer" onSubmit={handleSubmit} submitting={submitting} />
       </Card>
     </section>
   );

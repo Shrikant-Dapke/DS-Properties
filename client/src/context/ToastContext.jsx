@@ -37,7 +37,6 @@ export function ToastProvider({ children }) {
       warning: (m, o) => add('warning', m, o),
       info: (m, o) => add('info', m, o),
     },
-    remove,
   };
 
   return (

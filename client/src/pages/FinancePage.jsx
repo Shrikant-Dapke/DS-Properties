@@ -3,6 +3,7 @@ import { listTransactions, getFinanceSummary, SOURCE_LABELS } from '../services/
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
+import Pagination from '../components/Pagination.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency, formatDate } from '../utils/format.js';
@@ -198,17 +199,7 @@ export default function FinancePage() {
         </div>
       )}
 
-      {pagination.totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-end gap-3 font-sans text-sm text-navy/60">
-          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
-            Prev
-          </button>
-          <span>Page {pagination.page} of {pagination.totalPages}</span>
-          <button disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)} className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2">
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} className="justify-end" />
     </section>
   );
 }

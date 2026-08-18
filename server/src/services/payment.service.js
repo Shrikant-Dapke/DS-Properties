@@ -5,18 +5,19 @@ import Plot from '../models/Plot.js';
 import Customer from '../models/Customer.js';
 import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
+import { toDecimal128, parseAmount, parseDate, PAYMENT_METHODS } from '../utils/money.js';
+import { dateRangeFilter, pageMeta } from '../utils/query.js';
 
-const METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
-
-function toDecimal128(value) {
-  return mongoose.Types.Decimal128.fromString(new Decimal(value).toString());
-}
-
-async function sumPlotPaid(plotId, session) {
-  const payments = await Payment.find({ plotId }).session(session || null);
-  let total = new Decimal(0);
-  for (const p of payments) total = total.plus(new Decimal(p.amount.toString()));
-  return total;
+export async function sumPlotPaid(plotId, session) {
+  const agg = Payment.aggregate([
+    { $match: { plotId } },
+    { $group: { _id: null, total: { $sum: '$amount' } } },
+  ]);
+  if (session) agg.session(session);
+  const [row] = await agg;
+  if (!row || row.total === null || row.total === undefined) return new Decimal(0);
+  // row.total is a Decimal128; convert via string to avoid any JS Number coercion.
+  return new Decimal(row.total.toString());
 }
 
 export async function createPayment(body) {
@@ -26,25 +27,8 @@ export async function createPayment(body) {
   if (!body.plotId || !mongoose.Types.ObjectId.isValid(body.plotId)) {
     throw new AppError('Valid plotId is required', 400);
   }
-  if (body.amount === undefined || body.amount === null || String(body.amount).trim() === '') {
-    throw new AppError('Payment amount is required', 400);
-  }
-
-  let amount;
-  try {
-    amount = new Decimal(String(body.amount).trim());
-  } catch {
-    throw new AppError('Invalid payment amount', 400);
-  }
-  if (!amount.isFinite() || amount.lte(0)) {
-    throw new AppError('Payment amount must be greater than zero', 400);
-  }
-
-  if (!body.date) {
-    throw new AppError('Payment date is required', 400);
-  }
-  const date = new Date(body.date);
-  if (isNaN(date.getTime())) throw new AppError('Invalid payment date', 400);
+  const amount = parseAmount(body.amount, 'Payment amount');
+  const date = parseDate(body.date, 'Payment date');
 
   return runInTransaction(async (session) => {
     const customer = await Customer.findById(body.customerId).session(session);
@@ -78,7 +62,7 @@ export async function createPayment(body) {
           plotId: plot._id,
           amount: toDecimal128(amount),
           date,
-          method: METHODS.includes(body.method) ? body.method : 'Cash',
+          method: PAYMENT_METHODS.includes(body.method) ? body.method : 'Cash',
           reference: body.reference || undefined,
           notes: body.notes || undefined,
         },
@@ -116,42 +100,30 @@ export async function listPayments({
   }
   if (method) filter.method = method;
 
-  if (dateFrom || dateTo) {
-    const range = {};
-    if (dateFrom) {
-      const d = new Date(dateFrom);
-      if (isNaN(d.getTime())) throw new AppError('Invalid dateFrom', 400);
-      range.$gte = d;
-    }
-    if (dateTo) {
-      const d = new Date(dateTo);
-      if (isNaN(d.getTime())) throw new AppError('Invalid dateTo', 400);
-      range.$lte = d;
-    }
-    filter.date = range;
-  }
+  const range = dateRangeFilter(dateFrom, dateTo);
+  if (range) filter.date = range;
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-  const skip = (pageNum - 1) * limitNum;
+  const meta = pageMeta(page, limit, 0);
 
   const [items, total] = await Promise.all([
     Payment.find(filter)
       .populate('customerId', 'name')
       .populate('plotId', 'plotNumber')
       .sort({ date: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum),
+      .skip(meta.skip)
+      .limit(meta.limitNum),
     Payment.countDocuments(filter),
   ]);
+  meta.total = total;
+  meta.totalPages = Math.ceil(total / meta.limitNum);
 
   return {
     items,
     pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+      page: meta.page,
+      limit: meta.limitNum,
+      total: meta.total,
+      totalPages: meta.totalPages,
     },
   };
 }

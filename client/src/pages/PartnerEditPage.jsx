@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import PartnerForm from '../components/PartnerForm.jsx';
+import PartyForm from '../components/PartyForm.jsx';
 import * as partnerService from '../services/partner.service.js';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -48,7 +48,7 @@ export default function PartnerEditPage() {
       </Link>
       <h1 className="mt-2 font-display text-3xl text-navy">Edit Partner</h1>
       <div className="mt-6">
-        <PartnerForm initialValues={initial} onSubmit={handleSubmit} submitting={submitting} error={formError} />
+        <PartyForm showStatus submitLabel="Save Partner" initialValues={initial} onSubmit={handleSubmit} submitting={submitting} error={formError} />
       </div>
     </section>
   );

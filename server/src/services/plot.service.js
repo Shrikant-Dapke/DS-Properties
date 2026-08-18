@@ -3,6 +3,7 @@ import Plot from '../models/Plot.js';
 import Payment from '../models/Payment.js';
 import Customer from '../models/Customer.js';
 import { AppError } from '../utils/errors.js';
+import { pickFields, pageMeta } from '../utils/query.js';
 
 const ALLOWED = [
   'plotNumber',
@@ -18,14 +19,6 @@ const ALLOWED = [
 function fromDecimal(value) {
   if (value === '' || value === null || value === undefined) return null;
   return mongoose.Types.Decimal128.fromString(String(value).trim());
-}
-
-function pick(body) {
-  const data = {};
-  for (const field of ALLOWED) {
-    if (body[field] !== undefined) data[field] = body[field];
-  }
-  return data;
 }
 
 async function resolveCustomer(customerId) {
@@ -45,7 +38,7 @@ export async function createPlot(body) {
     throw new AppError('Plot price is required', 400);
   }
 
-  const data = pick(body);
+  const data = pickFields(body, ALLOWED);
   data.plotNumber = String(body.plotNumber).trim();
 
   let priceDecimal;
@@ -85,26 +78,26 @@ export async function listPlots({ search, status, customer, page = 1, limit = 20
     filter.customerId = customer;
   }
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-  const skip = (pageNum - 1) * limitNum;
+  const meta = pageMeta(page, limit, 0);
 
   const [items, total] = await Promise.all([
     Plot.find(filter)
       .populate('customerId', 'name')
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum),
+      .skip(meta.skip)
+      .limit(meta.limitNum),
     Plot.countDocuments(filter),
   ]);
+  meta.total = total;
+  meta.totalPages = Math.ceil(total / meta.limitNum);
 
   return {
     items,
     pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+      page: meta.page,
+      limit: meta.limitNum,
+      total: meta.total,
+      totalPages: meta.totalPages,
     },
   };
 }
@@ -121,7 +114,7 @@ export async function updatePlot(id, body) {
   const plot = await Plot.findById(id);
   if (!plot) throw new AppError('Plot not found', 404);
 
-  const data = pick(body);
+  const data = pickFields(body, ALLOWED);
   if (data.plotNumber !== undefined) data.plotNumber = String(data.plotNumber).trim();
   if (data.price !== undefined) {
     try {

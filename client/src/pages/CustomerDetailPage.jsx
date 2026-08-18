@@ -8,7 +8,7 @@ import Badge from '../components/Badge.jsx';
 import Button from '../components/Button.jsx';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
 
@@ -29,9 +29,12 @@ export default function CustomerDetailPage() {
   const [plotsLoading, setPlotsLoading] = useState(true);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [pendingDelete, setPendingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: () => customerService.deleteCustomer(id),
+    successMessage: 'Customer deleted successfully.',
+    errorMessage: 'Failed to delete customer.',
+    onSuccess: () => navigate('/customers'),
+  });
 
   useEffect(() => {
     load();
@@ -64,18 +67,7 @@ export default function CustomerDetailPage() {
       .finally(() => setPaymentsLoading(false));
   }, [id]);
 
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await customerService.deleteCustomer(id);
-      toast.success('Customer deleted successfully.');
-      navigate('/customers');
-    } catch (err) {
-      setPendingDelete(false);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete customer.'));
-    }
-  }
+
 
   if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
@@ -107,7 +99,7 @@ export default function CustomerDetailPage() {
           >
             Record Payment
           </Link>
-          <Button variant="danger" onClick={() => setPendingDelete(true)}>
+          <Button variant="danger" onClick={() => askDelete()}>
             Delete
           </Button>
         </div>
@@ -233,7 +225,7 @@ export default function CustomerDetailPage() {
         open={pendingDelete}
         name={customer.name}
         busy={deleting}
-        onCancel={() => setPendingDelete(false)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

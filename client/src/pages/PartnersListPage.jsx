@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as partnerService from '../services/partner.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Pagination from '../components/Pagination.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
 import Badge from '../components/Badge.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 
 const STATUS_OPTIONS = ['All', 'Active', 'Inactive'];
@@ -20,9 +21,12 @@ export default function PartnersListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: (item) => partnerService.deletePartner(item._id),
+    successMessage: 'Partner deleted successfully.',
+    errorMessage: 'Failed to delete partner.',
+    onSuccess: () => load(),
+  });
   const navigate = useNavigate();
 
   async function load() {
@@ -44,19 +48,7 @@ export default function PartnersListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, status, page]);
 
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await partnerService.deletePartner(pendingDelete._id);
-      setPendingDelete(null);
-      toast.success('Partner deleted successfully.');
-      load();
-    } catch (err) {
-      setPendingDelete(null);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete partner.'));
-    }
-  }
+
 
   const activeCount = (search ? 1 : 0) + (status !== 'All' ? 1 : 0);
 
@@ -158,7 +150,7 @@ export default function PartnersListPage() {
                       Edit
                     </Link>
                     <button
-                      onClick={() => setPendingDelete(p)}
+                      onClick={() => askDelete(p)}
                       className="ml-3 font-sans text-orange hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
                     >
                       Delete
@@ -171,34 +163,19 @@ export default function PartnersListPage() {
         </div>
       )}
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="mt-4 flex items-center gap-3 font-sans text-sm text-navy/70">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-          >
-            Prev
-          </button>
-          <span>
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          <button
-            disabled={page >= pagination.totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={pagination?.totalPages || 1}
+        onPageChange={setPage}
+        buttonClassName="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+      />
 
       <DeleteConfirmModal
         open={!!pendingDelete}
         name={pendingDelete?.name}
         message="This partner cannot be deleted while they have capital contributions on record. Reassign or remove those contributions first."
         busy={deleting}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

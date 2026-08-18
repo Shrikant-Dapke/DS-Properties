@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as customerService from '../services/customer.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Pagination from '../components/Pagination.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 
 export default function CustomersListPage() {
@@ -16,9 +17,12 @@ export default function CustomersListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: (item) => customerService.deleteCustomer(item._id),
+    successMessage: 'Customer deleted successfully.',
+    errorMessage: 'Failed to delete customer.',
+    onSuccess: () => load(),
+  });
   const navigate = useNavigate();
 
   async function load() {
@@ -40,19 +44,7 @@ export default function CustomersListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, page]);
 
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await customerService.deleteCustomer(pendingDelete._id);
-      setPendingDelete(null);
-      toast.success('Customer deleted successfully.');
-      load();
-    } catch (err) {
-      setPendingDelete(null);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete customer.'));
-    }
-  }
+
 
   const activeCount = search ? 1 : 0;
 
@@ -132,7 +124,7 @@ export default function CustomersListPage() {
                       Edit
                     </Link>
                     <button
-                      onClick={() => setPendingDelete(c)}
+                      onClick={() => askDelete(c)}
                       className="ml-3 font-sans text-orange hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
                     >
                       Delete
@@ -145,33 +137,18 @@ export default function CustomersListPage() {
         </div>
       )}
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="mt-4 flex items-center gap-3 font-sans text-sm text-navy/70">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-          >
-            Prev
-          </button>
-          <span>
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          <button
-            disabled={page >= pagination.totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={pagination?.totalPages || 1}
+        onPageChange={setPage}
+        buttonClassName="rounded border border-navy/20 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
+      />
 
       <DeleteConfirmModal
         open={!!pendingDelete}
         name={pendingDelete?.name}
         busy={deleting}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

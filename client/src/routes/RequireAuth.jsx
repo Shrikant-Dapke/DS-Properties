@@ -3,12 +3,10 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Spinner from '../components/Spinner.jsx';
 
 /**
- * Protects application routes.
- * - Requires a valid token + user (backend still enforces everything).
- * - Optional `roles` prop restricts which roles may enter. This is UI/routing
- *   convenience only; the server is the real security boundary.
+ * Protects application routes. Requires a valid token + user; the backend
+ * still enforces all authorization.
  */
-export function RequireAuth({ children, roles }) {
+export function RequireAuth({ children }) {
   const { user, token, loading } = useAuth();
   const location = useLocation();
 
@@ -22,10 +20,6 @@ export function RequireAuth({ children, roles }) {
 
   if (!token || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  if (roles && roles.length > 0 && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
   }
 
   return children;

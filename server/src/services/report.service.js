@@ -11,10 +11,10 @@ import PartnerCapital from '../models/PartnerCapital.js';
 import LoanReceived from '../models/LoanReceived.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/errors.js';
+import { PAYMENT_METHODS } from '../utils/money.js';
 
 const REPORT_TYPES = ['customers', 'plots', 'payments', 'expenses', 'income', 'capital', 'loans', 'financial'];
 const PLOT_STATUSES = ['Available', 'Reserved', 'Allocated', 'Sold'];
-const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
 
 function isValidId(v) {
   return v && mongoose.Types.ObjectId.isValid(v);

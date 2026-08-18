@@ -20,8 +20,6 @@ export async function authenticate(req, res, next) {
 
     // Authoritative identity — never trust a client-supplied role.
     req.user = user;
-    req.userId = user._id.toString();
-    req.role = user.role;
 
     next();
   } catch (err) {

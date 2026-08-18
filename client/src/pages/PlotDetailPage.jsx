@@ -7,7 +7,7 @@ import Badge from '../components/Badge.jsx';
 import Button from '../components/Button.jsx';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
 
@@ -26,9 +26,12 @@ export default function PlotDetailPage() {
   const [loading, setLoading] = useState(true);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [pendingDelete, setPendingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: () => plotService.deletePlot(id),
+    successMessage: 'Plot deleted successfully.',
+    errorMessage: 'Failed to delete plot.',
+    onSuccess: () => navigate('/plots'),
+  });
 
   useEffect(() => {
     load();
@@ -53,18 +56,7 @@ export default function PlotDetailPage() {
       .finally(() => setPaymentsLoading(false));
   }, [id]);
 
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await plotService.deletePlot(id);
-      toast.success('Plot deleted successfully.');
-      navigate('/plots');
-    } catch (err) {
-      setPendingDelete(false);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete plot.'));
-    }
-  }
+
 
   if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
@@ -111,7 +103,7 @@ export default function PlotDetailPage() {
           >
             Record Payment
           </Link>
-          <Button variant="danger" onClick={() => setPendingDelete(true)}>
+          <Button variant="danger" onClick={() => askDelete()}>
             Delete
           </Button>
         </div>
@@ -217,7 +209,7 @@ export default function PlotDetailPage() {
         open={pendingDelete}
         name={`Plot ${plot.plotNumber}`}
         busy={deleting}
-        onCancel={() => setPendingDelete(false)}
+        onCancel={cancelDelete}
         onConfirm={confirmDelete}
       />
     </section>

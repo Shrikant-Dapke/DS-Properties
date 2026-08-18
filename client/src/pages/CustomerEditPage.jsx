@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import CustomerForm from '../components/CustomerForm.jsx';
+import PartyForm from '../components/PartyForm.jsx';
 import Card from '../components/Card.jsx';
 import Spinner from '../components/Spinner.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -44,7 +44,7 @@ export default function CustomerEditPage() {
     <section className="max-w-xl">
       <h1 className="font-display text-3xl text-navy">Edit Customer</h1>
       <Card className="mt-6 p-6">
-        <CustomerForm initialValues={initial} onSubmit={handleSubmit} submitting={submitting} />
+        <PartyForm showStatus={false} submitLabel="Save Customer" initialValues={initial} onSubmit={handleSubmit} submitting={submitting} />
       </Card>
     </section>
   );

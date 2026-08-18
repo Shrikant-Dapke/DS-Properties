@@ -1,13 +1,10 @@
 import mongoose from 'mongoose';
-import Decimal from 'decimal.js';
 import Income from '../models/Income.js';
 import Category from '../models/Category.js';
 import { syncTransaction, runInTransaction } from './finance.service.js';
 import { AppError } from '../utils/errors.js';
-
-function toDecimal128(value) {
-  return mongoose.Types.Decimal128.fromString(new Decimal(value).toString());
-}
+import { toDecimal128, parseAmount, parseDate } from '../utils/money.js';
+import { dateRangeFilter, pageMeta } from '../utils/query.js';
 
 async function validateIncomeCategory(categoryId, { requireActive }) {
   if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -24,32 +21,9 @@ async function validateIncomeCategory(categoryId, { requireActive }) {
   return category;
 }
 
-function parseAmount(raw) {
-  if (raw === undefined || raw === null || String(raw).trim() === '') {
-    throw new AppError('Income amount is required', 400);
-  }
-  let amount;
-  try {
-    amount = new Decimal(String(raw).trim());
-  } catch {
-    throw new AppError('Invalid income amount', 400);
-  }
-  if (!amount.isFinite() || amount.lte(0)) {
-    throw new AppError('Income amount must be greater than zero', 400);
-  }
-  return amount;
-}
-
-function parseDate(raw) {
-  if (!raw) throw new AppError('Income date is required', 400);
-  const date = new Date(raw);
-  if (isNaN(date.getTime())) throw new AppError('Invalid income date', 400);
-  return date;
-}
-
 export async function createIncome(body) {
-  const amount = parseAmount(body.amount);
-  const date = parseDate(body.date);
+  const amount = parseAmount(body.amount, 'Income amount');
+  const date = parseDate(body.date, 'Income date');
   await validateIncomeCategory(body.categoryId, { requireActive: true });
 
   return runInTransaction(async (session) => {
@@ -89,41 +63,28 @@ export async function listIncome({
     filter.categoryId = category;
   }
 
-  if (dateFrom || dateTo) {
-    const range = {};
-    if (dateFrom) {
-      const d = new Date(dateFrom);
-      if (isNaN(d.getTime())) throw new AppError('Invalid dateFrom', 400);
-      range.$gte = d;
-    }
-    if (dateTo) {
-      const d = new Date(dateTo);
-      if (isNaN(d.getTime())) throw new AppError('Invalid dateTo', 400);
-      range.$lte = d;
-    }
-    filter.date = range;
-  }
+  const range = dateRangeFilter(dateFrom, dateTo);
+  if (range) filter.date = range;
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-  const skip = (pageNum - 1) * limitNum;
-
+  const meta = pageMeta(page, limit, 0);
   const [items, total] = await Promise.all([
     Income.find(filter)
       .populate('categoryId', 'name type isSeed active')
       .sort({ date: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum),
+      .skip(meta.skip)
+      .limit(meta.limitNum),
     Income.countDocuments(filter),
   ]);
+  meta.total = total;
+  meta.totalPages = Math.ceil(total / meta.limitNum);
 
   return {
     items,
     pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+      page: meta.page,
+      limit: meta.limitNum,
+      total: meta.total,
+      totalPages: meta.totalPages,
     },
   };
 }
@@ -143,11 +104,11 @@ export async function updateIncome(id, body) {
     if (!income) throw new AppError('Income not found', 404);
 
     if (body.amount !== undefined) {
-      const amount = parseAmount(body.amount);
+      const amount = parseAmount(body.amount, 'Income amount');
       income.amount = toDecimal128(amount);
     }
     if (body.date !== undefined) {
-      income.date = parseDate(body.date);
+      income.date = parseDate(body.date, 'Income date');
     }
     if (body.categoryId !== undefined && body.categoryId !== income.categoryId.toString()) {
       // Changing the category requires an active income category.

@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as expenseService from '../services/expense.service.js';
 import * as categoryService from '../services/category.service.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.jsx';
+import Pagination from '../components/Pagination.jsx';
 import Badge from '../components/Badge.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
 
@@ -28,9 +29,12 @@ export default function ExpensesListPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
 
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: (item) => expenseService.deleteExpense(item._id),
+    successMessage: 'Expense soft-deleted.',
+    errorMessage: 'Failed to delete expense.',
+    onSuccess: (item) => setExpenses((prev) => prev.map((e) => (e._id === item._id ? { ...e, deleted: true } : e))),
+  });
 
   useEffect(() => {
     categoryService
@@ -62,22 +66,7 @@ export default function ExpensesListPage() {
       .finally(() => setLoading(false));
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    setDeleting(true);
-    try {
-      await expenseService.deleteExpense(pendingDelete._id);
-      setExpenses((prev) =>
-        prev.map((e) => (e._id === pendingDelete._id ? { ...e, deleted: true } : e))
-      );
-      setPendingDelete(null);
-      toast.success('Expense soft-deleted.');
-    } catch (err) {
-      setPendingDelete(null);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete expense.'));
-    }
-  }
+
 
   const activeCount = (category ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
   const clearFilters = () => {
@@ -238,7 +227,7 @@ export default function ExpensesListPage() {
                           Edit
                         </Link>
                         <button
-                          onClick={() => setPendingDelete(e)}
+                          onClick={() => askDelete(e)}
                           disabled={e.deleted}
                           className="text-orange hover:underline disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
                         >
@@ -252,27 +241,7 @@ export default function ExpensesListPage() {
             </table>
           </div>
 
-          {pagination.totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-end gap-3 font-sans text-sm text-navy/60">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-              >
-                Prev
-              </button>
-              <span>
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <button
-                disabled={page >= pagination.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-navy/15 px-3 py-1 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo focus-visible:ring-offset-2"
-              >
-                Next
-              </button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={pagination.totalPages} onPageChange={setPage} className="justify-end" />
         </>
       )}
 
@@ -291,7 +260,7 @@ export default function ExpensesListPage() {
         }
         confirmLabel="Delete"
         onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={cancelDelete}
         busy={deleting}
       />
     </section>

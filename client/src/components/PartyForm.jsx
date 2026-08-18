@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import Field, { inputClass } from '../components/Field.jsx';
-import Button from '../components/Button.jsx';
+import Field, { inputClass } from './Field.jsx';
+import Button from './Button.jsx';
 
 const STATUS_OPTIONS = ['Active', 'Inactive'];
 
-export default function PartnerForm({ initialValues = {}, onSubmit, submitting = false, error = '' }) {
+export default function PartyForm({
+  showStatus = false,
+  submitLabel = 'Save',
+  initialValues = {},
+  onSubmit,
+  submitting = false,
+  error = '',
+}) {
   const [form, setForm] = useState({
     name: initialValues.name || '',
     phone: initialValues.phone || '',
@@ -26,14 +33,15 @@ export default function PartnerForm({ initialValues = {}, onSubmit, submitting =
       return;
     }
     setNameError('');
-    await onSubmit({
+    const payload = {
       name: form.name.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
       address: form.address.trim(),
       notes: form.notes.trim(),
-      status: form.status,
-    });
+    };
+    if (showStatus) payload.status = form.status;
+    await onSubmit(payload);
   }
 
   return (
@@ -79,20 +87,22 @@ export default function PartnerForm({ initialValues = {}, onSubmit, submitting =
         />
       </Field>
 
-      <Field label="Status" htmlFor="status">
-        <select
-          id="status"
-          className={inputClass}
-          value={form.status}
-          onChange={(e) => update('status', e.target.value)}
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {showStatus && (
+        <Field label="Status" htmlFor="status">
+          <select
+            id="status"
+            className={inputClass}
+            value={form.status}
+            onChange={(e) => update('status', e.target.value)}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
       <Field label="Notes" htmlFor="notes">
         <textarea
@@ -105,7 +115,7 @@ export default function PartnerForm({ initialValues = {}, onSubmit, submitting =
       </Field>
 
       <Button type="submit" loading={submitting}>
-        {submitting ? 'Saving…' : 'Save Partner'}
+        {submitting ? 'Saving…' : submitLabel}
       </Button>
     </form>
   );

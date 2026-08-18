@@ -17,9 +17,3 @@ export const SOURCE_LABELS = {
   capital: 'Partner Capital',
   loan: 'Loan',
 };
-
-export const FINANCE_TABS = [
-  { value: 'all', label: 'All Transactions' },
-  { value: 'in', label: 'Money In' },
-  { value: 'out', label: 'Money Out' },
-];

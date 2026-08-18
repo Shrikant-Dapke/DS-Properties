@@ -6,7 +6,7 @@ import Badge from '../components/Badge.jsx';
 import Button from '../components/Button.jsx';
 import Spinner from '../components/Spinner.jsx';
 import ErrorState from '../components/ErrorState.jsx';
-import { useToast } from '../context/ToastContext.jsx';
+import { useDelete } from '../hooks/useDelete.js';
 import { getErrorMessage } from '../utils/errorMessage.js';
 import { formatCurrency } from '../utils/format.js';
 
@@ -16,9 +16,12 @@ export default function ExpenseDetailPage() {
   const [expense, setExpense] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [pendingDelete, setPendingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const { toast } = useToast();
+  const { pendingDelete, deleting, askDelete, cancelDelete, confirmDelete } = useDelete({
+    deleteFn: () => expenseService.deleteExpense(id),
+    successMessage: 'Expense soft-deleted.',
+    errorMessage: 'Failed to delete expense.',
+    onSuccess: () => setExpense((prev) => (prev ? { ...prev, deleted: true } : prev)),
+  });
 
   useEffect(() => {
     load();
@@ -35,19 +38,7 @@ export default function ExpenseDetailPage() {
       .finally(() => setLoading(false));
   }
 
-  async function confirmDelete() {
-    setDeleting(true);
-    try {
-      await expenseService.deleteExpense(id);
-      setExpense((prev) => (prev ? { ...prev, deleted: true } : prev));
-      setPendingDelete(false);
-      toast.success('Expense soft-deleted.');
-    } catch (err) {
-      setPendingDelete(false);
-      setDeleting(false);
-      toast.error(getErrorMessage(err, 'Failed to delete expense.'));
-    }
-  }
+
 
   if (loading) return <Spinner size="sm" className="mt-6" />;
   if (error)
@@ -99,7 +90,7 @@ export default function ExpenseDetailPage() {
           </Link>
         )}
         {!expense.deleted && (
-          <Button variant="danger" onClick={() => setPendingDelete(true)}>
+          <Button variant="danger" onClick={() => askDelete()}>
             Delete
           </Button>
         )}
@@ -118,7 +109,7 @@ export default function ExpenseDetailPage() {
         }
         confirmLabel="Delete"
         onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(false)}
+        onCancel={cancelDelete}
         busy={deleting}
       />
     </section>

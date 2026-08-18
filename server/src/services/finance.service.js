@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import Decimal from 'decimal.js';
 import Transaction from '../models/Transaction.js';
+import { toDecimal128 } from '../utils/money.js';
+import { pageMeta } from '../utils/query.js';
 
 // Entity types that contribute to the unified finance ledger.
 export const FINANCIAL_ENTITY_TYPES = [
@@ -31,11 +33,6 @@ function toObjectId(value) {
   return mongoose.Types.ObjectId.isValid(str)
     ? new mongoose.Types.ObjectId(str)
     : null;
-}
-
-function toDecimal128(value) {
-  if (value === null || value === undefined) return null;
-  return mongoose.Types.Decimal128.fromString(new Decimal(value.toString()).toString());
 }
 
 function toStringOrNull(value) {
@@ -263,9 +260,7 @@ export async function listTransactions({
     sourceType,
   });
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 25));
-  const skip = (pageNum - 1) * limitNum;
+  const meta = pageMeta(page, limit, 0, { max: 200, fallback: 25 });
 
   const [items, total, sumRows] = await Promise.all([
     Transaction.find(filter)
@@ -274,8 +269,8 @@ export async function listTransactions({
       .populate('plotId', 'plotNumber')
       .populate('categoryId', 'name type')
       .sort({ date: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum),
+      .skip(meta.skip)
+      .limit(meta.limitNum),
     Transaction.countDocuments(filter),
     Transaction.aggregate([
       { $match: filter },
@@ -288,6 +283,9 @@ export async function listTransactions({
     ]),
   ]);
 
+  meta.total = total;
+  meta.totalPages = Math.ceil(total / meta.limitNum);
+
   const totals = { in: '0', out: '0' };
   for (const row of sumRows) {
     totals[row._id] = new Decimal(row.total.toString()).toString();
@@ -296,10 +294,10 @@ export async function listTransactions({
   return {
     items,
     pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+      page: meta.page,
+      limit: meta.limitNum,
+      total: meta.total,
+      totalPages: meta.totalPages,
     },
     totals: {
       in: totals.in,
