@@ -2,6 +2,37 @@
 
 All notable changes to DS Properties V4.
 
+## [0.1.2] — 2026-08-20
+
+Critical session-stability fix — "Save Entry → redirected to Login" regression.
+
+### Fixed
+
+**Frontend**
+- Session no longer destroyed on transient refresh failures. The 401-refresh
+  interceptor only clears tokens and redirects to `/login` when the refresh
+  endpoint returns a genuine 401 (invalid/expired refresh token); rate-limit
+  (429), server (5xx) and network failures now preserve the session and surface
+  the error so the next attempt can retry.
+- Refresh calls are single-flight: concurrent callers (401 interceptor, session
+  restore, StrictMode double-mount, multiple tabs) share one in-flight refresh,
+  so the refresh token is never rotated twice with the same value (which the
+  server's reuse detection treats as theft).
+- Session restore no longer refreshes on every page load: when the access token
+  is still valid and the user is cached, restore is offline. This stops the app
+  from burning the auth rate limit (20 requests / 15 min, shared by login +
+  refresh) on reloads — the cause of refresh 429s at save time.
+
+### Tests
+
+- Frontend suite: new live-backend integration tests for the auth client
+  (`client.integration.test.js`, auto-skipped when the backend is down):
+  login stores tokens + user; expired access token → exactly one refresh →
+  original request retried successfully; restore with valid token makes zero
+  network calls; concurrent restores share one refresh; revoked refresh token →
+  401 → session cleared without redirect; transient 429 → tokens preserved, no
+  redirect. Suite total: 15 tests (9 component + 6 integration).
+
 ## [0.1.1] — 2026-08-20
 
 Audit + corrective pass — confirmed findings fixed with regression coverage.
