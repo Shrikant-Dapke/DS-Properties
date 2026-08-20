@@ -1,0 +1,25 @@
+# DS Properties V4 — Local Development Database
+# Usage: docker compose up -d   (requires Docker; a locally installed PostgreSQL works too)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dsp-v4-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: dsp_v4
+      POSTGRES_PASSWORD: dsp_v4_password
+      POSTGRES_DB: ds_properties_v4
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dsp_v4 -d ds_properties_v4"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    driver: local
