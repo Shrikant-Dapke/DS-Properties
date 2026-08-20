@@ -75,7 +75,12 @@ Default admin login: **admin / Admin@123** (change it after first login).
 - **Audit trail**: every meaningful action (login, create, update, delete, reverse,
   settings) is recorded with actor, IP, user agent, and before/after values.
 - **Dashboard caching**: aggregate endpoints are cached server-side and invalidated on
-  any financial mutation.
+  any financial mutation. Cache keys embed the selected date range, so periods never
+  bleed across one another.
+- **Date-range filtering**: Dashboard, Transactions, and every report tab support Daily /
+  Weekly / Monthly / Yearly / Custom quick modes plus From/To. Filtering is enforced by
+  the backend (`from`/`to` query params, inclusive, `YYYY-MM-DD`); the UI never filters
+  data client-side.
 
 ## Project layout
 
@@ -115,9 +120,11 @@ require `Authorization: Bearer <accessToken>`.
 - `partners` — CRUD + ledger
 - `categories` — CRUD + `GET /categories/active`
 - `transactions` — CRUD + `POST /transactions/:id/reverse` (admin password required for
-  delete/reverse; `PATCH /:id` edits an entry, admin + operator)
-- `dashboard` — summary + category breakdown (cached)
-- `reports` — daily, monthly, category range, partner financial
+  delete/reverse; `PATCH /:id` edits an entry, admin + operator; list accepts
+  optional `?from&to`)
+- `dashboard` — summary + category breakdown (cached; both accept `?from&to`)
+- `reports` — daily (`?from&to`), monthly (`?year&month` or `?from&to`), category range
+  (`?from&to`), partner financial (`/:id?from&to`, optional range)
 - `settings` — list/update app settings (admin)
 - `users` — CRUD, activate/deactivate, reset password (admin)
 - `audit` — paginated audit log (admin)

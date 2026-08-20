@@ -12,7 +12,12 @@ export async function dailyReport(req, res) {
 }
 
 export async function monthlyReport(req, res) {
-  const data = await getMonthlyReport({ year: req.query.year, month: req.query.month });
+  const data = await getMonthlyReport({
+    year: req.query.year,
+    month: req.query.month,
+    from: req.query.from,
+    to: req.query.to,
+  });
   res.json({ success: true, data });
 }
 
@@ -25,6 +30,8 @@ export async function partnerReport(req, res) {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit);
   const data = await getPartnerFinancialReport(req.params.id, {
+    from: req.query.from,
+    to: req.query.to,
     page,
     limit,
     offset: offset(page, limit),

@@ -17,8 +17,8 @@ async function fetchAllPages(fetchPage, maxPages = 50) {
 }
 
 export const dashboardApi = {
-  summary: () => get('/dashboard/summary'),
-  categoryBreakdown: () => get('/dashboard/categories'),
+  summary: (params) => get('/dashboard/summary', params),
+  categoryBreakdown: (params) => get('/dashboard/categories', params),
 };
 
 export const customerApi = {

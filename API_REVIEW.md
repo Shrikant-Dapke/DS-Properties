@@ -1,7 +1,7 @@
 # API_REVIEW
 
 Post-implementation self-review of the HTTP API against the master spec. Verified by the
-integration suite (51 tests) and a live end-to-end smoke run.
+integration suite (65 tests) and a live end-to-end smoke run.
 
 ## Coverage vs. spec
 
@@ -14,11 +14,11 @@ integration suite (51 tests) and a live end-to-end smoke run.
 | Categories: add/edit/delete/list | ✅ | admin-only mutation, public read |
 | Entries: add/edit/list/filter, payment mode | ✅ | filter by type/source/date-range/search |
 | Reversal / cancel of entries | ✅ | admin + password; ledger-correct |
-| Dashboard: opening balance, current balance, total intakes, outtakes, FY intake/outtake/net | ✅ | `/dashboard/summary` |
-| Monthly report (intakes/outtakes/categories/top customers) | ✅ | `/reports/monthly?year&month` |
+| Dashboard: opening balance, current balance, total intakes, outtakes, FY intake/outtake/net | ✅ | `/dashboard/summary?from&to`; adds period-scoped stats + recent entries |
+| Monthly report (intakes/outtakes/categories/top customers) | ✅ | `/reports/monthly?year&month` or `?from&to` |
 | Daily report | ✅ | `/reports/daily?from&to` |
 | Date-range category report | ✅ | `/reports/categories?from&to` |
-| Partner financial report (capital, loans, transfers, net) | ✅ | `/reports/partners/:publicId?from&to` |
+| Partner financial report (capital, loans, transfers, net) | ✅ | `/reports/partners/:publicId?from&to` (optional range; all-time default) |
 | Recent entries on dashboard | ✅ | `recentTransactions` in summary |
 | Customer / partner ledger | ✅ | `/customers/:id/ledger`, `/partners/:id/ledger` |
 | Export data (PDF/Excel) | ✅ | frontend buttons per report tab; backend data via report endpoints |
@@ -42,12 +42,12 @@ integration suite (51 tests) and a live end-to-end smoke run.
 
 ```
 POST  /auth/login | /auth/refresh | /auth/logout | /auth/change-password
-GET   /dashboard/summary, /dashboard/categories
+GET   /dashboard/summary?from&to, /dashboard/categories?from&to
 GET/POST/DELETE        /customers            (GET /:id, /:id/ledger)
 GET/POST/DELETE        /partners             (GET /:id, /:id/ledger)
 GET/POST               /categories           (GET /active, /:id; PATCH /:id; DELETE /:id)
-GET/POST/DELETE        /transactions         (GET /:id; PATCH /:id; POST /:id/reverse)
-GET   /reports/daily | /reports/monthly | /reports/categories | /reports/partners/:publicId
+GET/POST/DELETE        /transactions         (GET /:id; PATCH /:id; POST /:id/reverse; list accepts ?from&to)
+GET   /reports/daily?from&to | /reports/monthly?year&month|?from&to | /reports/categories?from&to | /reports/partners/:publicId?from&to
 GET/PATCH /settings    (GET /:key; PATCH /:key)
 GET/POST /users        (GET /:id; PATCH /:id; POST /:id/activate, /:id/deactivate, /:id/reset-password; DELETE /:id)
 GET   /audit?page&limit&action&userId&from&to
@@ -65,6 +65,11 @@ GET   /health
    returns 409.
 2. **Reports are consistent with entries list**: all use the same "active, not reversed"
    aggregation, so dashboard, reports, and ledgers always agree (verified numerically).
+2. **Date-range filtering**: any list endpoint accepts optional `from`/`to` (`YYYY-MM-DD`,
+   inclusive) and may be single-sided; aggregate/report/dashboard endpoints require both
+   sides or neither (rejecting `from > to` with a 400). The monthly report accepts
+   `year`+`month` OR `from`+`to` (range wins when both are sent). Dashboard cache keys
+   embed the range, so cached aggregates can never bleed across periods.
 3. **Pagination default** `page=1&limit=20` (max 200). Ledger/dashboard fetch large sets
    via `limit` where the UI needs full client-side work. Partner report totals are
    computed server-side over the full ledger, independent of the page.

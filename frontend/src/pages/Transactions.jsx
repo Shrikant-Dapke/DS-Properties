@@ -12,9 +12,11 @@ import { Pagination } from '../components/common/Pagination.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Modal } from '../components/common/Modal.jsx';
 import { Badge } from '../components/common/Badge.jsx';
+import { DateRangeFilter } from '../components/common/DateRangeFilter.jsx';
 import { formatINR, formatDate, formatDateTime, titleCase } from '../utils/formatters.js';
 import { canWrite, isAdmin } from '../contexts/authContextDef.js';
 import { SOURCE_LABELS, TRANSACTION_TYPES } from '../utils/constants.js';
+import { DATE_MODES } from '../utils/dateRange.js';
 
 const filtersInitial = {
   type: '',
@@ -37,6 +39,7 @@ export default function Transactions() {
   const [action, setAction] = useState(null);
   const [adminPassword, setAdminPassword] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [rangeResetKey, setRangeResetKey] = useState(0);
 
   const load = async (p = page, f = filters) => {
     setLoading(true);
@@ -69,6 +72,20 @@ export default function Transactions() {
     e.preventDefault();
     setPage(1);
     load(1, filters);
+  };
+
+  // Quick-mode range changes apply immediately and reset to the first page.
+  const applyRange = (range) => {
+    setFilters((f) => ({ ...f, from: range.from, to: range.to }));
+    setPage(1);
+    load(1, { ...filters, from: range.from, to: range.to });
+  };
+
+  const resetFilters = () => {
+    setFilters(filtersInitial);
+    setPage(1);
+    setRangeResetKey((k) => k + 1);
+    load(1, filtersInitial);
   };
 
   const runAction = async () => {
@@ -162,19 +179,17 @@ export default function Transactions() {
               </option>
             ))}
           </Select>
-          <Input label="From" type="date" value={filters.from} onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))} />
-          <Input label="To" type="date" value={filters.to} onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))} />
+          <div className="sm:col-span-2 lg:col-span-3">
+            <DateRangeFilter
+              key={rangeResetKey}
+              defaultMode={DATE_MODES.CUSTOM}
+              allowEmpty
+              onChange={applyRange}
+            />
+          </div>
           <div className="flex items-end gap-2">
             <Button type="submit">Filter</Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setFilters(filtersInitial);
-                setPage(1);
-                load(1, filtersInitial);
-              }}
-            >
+            <Button type="button" variant="ghost" onClick={resetFilters}>
               Reset
             </Button>
           </div>

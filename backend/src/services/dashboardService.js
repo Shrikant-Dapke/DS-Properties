@@ -3,33 +3,37 @@ import {
   periodSummary,
   recentTransactions,
   categoryReport,
+  balanceUpTo,
 } from '../models/transactionModel.js';
 import { getOpeningBalance } from '../models/settingsModel.js';
 import { cacheGet, cacheSet, invalidateFinancialCache } from '../utils/cache.js';
-import { FINANCIAL_YEAR_START_MONTH } from '../config/constants.js';
+import { financialYearRange, addDays, assertValidRange } from '../utils/dateRange.js';
 
-function financialYearRange(date = new Date()) {
-  const startYear = date.getMonth() + 1 >= FINANCIAL_YEAR_START_MONTH
-    ? date.getFullYear()
-    : date.getFullYear() - 1;
-  const start = new Date(Date.UTC(startYear, FINANCIAL_YEAR_START_MONTH - 1, 1));
-  const end = new Date(Date.UTC(startYear + 1, FINANCIAL_YEAR_START_MONTH - 1, 0));
-  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10), startYear };
+// Cache keys are scoped to the requested period so different ranges can never
+// share aggregate results.
+function cacheKeyFor(prefix, from, to) {
+  return `financial:${prefix}:${from}:${to}`;
 }
 
-export async function getDashboardSummary() {
-  const cacheKey = 'financial:dashboard';
+// The default period is the current financial year (April start) — this keeps
+// the out-of-the-box dashboard behavior identical to before.
+export async function getDashboardSummary({ from = null, to = null } = {}) {
+  assertValidRange(from, to);
+  const period = from && to ? { from, to } : financialYearRange();
+  const cacheKey = cacheKeyFor('dashboard', period.from, period.to);
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const [breakdown, openingBalance, recent, fy] = await Promise.all([
+  const [breakdown, openingBalance, recent, priorBalance, periodData] = await Promise.all([
     balanceBreakdown(),
     getOpeningBalance(),
-    recentTransactions(8),
-    financialYearRange(),
+    recentTransactions(8, period),
+    balanceUpTo(addDays(period.from, -1)),
+    periodSummary(period),
   ]);
 
-  const fySummary = await periodSummary({ from: fy.from, to: fy.to });
+  const periodOpeningBalance =
+    Number(openingBalance) + Number(priorBalance.total_intake) - Number(priorBalance.total_outtake);
 
   const result = {
     openingBalance,
@@ -41,13 +45,19 @@ export async function getDashboardSummary() {
       partnerCapital: breakdown.partner_capital,
       partnerLoan: breakdown.partner_loan,
     },
-    financialYear: {
-      startYear: fy.startYear,
-      from: fy.from,
-      to: fy.to,
-      intake: fySummary.total_intake,
-      outtake: fySummary.total_outtake,
-      net: Number(fySummary.total_intake) - Number(fySummary.total_outtake),
+    financialYear: financialYearRange(),
+    period: {
+      from: period.from,
+      to: period.to,
+      openingBalance: periodOpeningBalance,
+      intake: periodData.total_intake,
+      outtake: periodData.total_outtake,
+      net: Number(periodData.total_intake) - Number(periodData.total_outtake),
+      customerIntake: periodData.customer_intake,
+      partnerCapital: periodData.partner_capital,
+      partnerLoan: periodData.partner_loan,
+      intakeCount: periodData.intake_count,
+      outtakeCount: periodData.outtake_count,
     },
     recentTransactions: recent,
   };
@@ -56,13 +66,14 @@ export async function getDashboardSummary() {
   return result;
 }
 
-export async function getCategoryBreakdown() {
-  const cacheKey = 'financial:categoryBreakdown';
+export async function getCategoryBreakdown({ from = null, to = null } = {}) {
+  assertValidRange(from, to);
+  const period = from && to ? { from, to } : financialYearRange();
+  const cacheKey = cacheKeyFor('categoryBreakdown', period.from, period.to);
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const fy = financialYearRange();
-  const rows = await categoryReport({ from: fy.from, to: fy.to });
+  const rows = await categoryReport(period);
   cacheSet(cacheKey, rows, 60);
   return rows;
 }

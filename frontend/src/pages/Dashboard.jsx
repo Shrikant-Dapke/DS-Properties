@@ -15,10 +15,12 @@ import { dashboardApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { formatINR } from '../utils/formatters.js';
+import { DATE_MODES, financialYearRange } from '../utils/dateRange.js';
 import { canWrite } from '../contexts/authContextDef.js';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Card } from '../components/common/Card.jsx';
+import { DateRangeFilter } from '../components/common/DateRangeFilter.jsx';
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
@@ -33,10 +35,13 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [categoryBreakdown, setCategoryBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState(() => ({ mode: DATE_MODES.YEARLY, ...financialYearRange() }));
 
   useEffect(() => {
     let active = true;
-    Promise.all([dashboardApi.summary(), dashboardApi.categoryBreakdown()])
+    setLoading(true);
+    const params = range.from ? { from: range.from, to: range.to } : {};
+    Promise.all([dashboardApi.summary(params), dashboardApi.categoryBreakdown(params)])
       .then(([summary, categories]) => {
         if (!active) return;
         setData(summary);
@@ -47,7 +52,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, [toast]);
+  }, [toast, range]);
 
   const { chartData, breakdownRows } = useMemo(() => {
     const rows = categoryBreakdown || [];
@@ -57,7 +62,7 @@ export default function Dashboard() {
         labels: sorted.map((c) => c.category_name),
         datasets: [
           {
-            label: 'Outtakes this year',
+            label: 'Outtakes',
             data: sorted.map((c) => Number(c.total_outtake)),
             backgroundColor: colors,
             borderWidth: 0,
@@ -69,17 +74,18 @@ export default function Dashboard() {
   }, [categoryBreakdown]);
 
   const totals = data?.totals || {};
+  const period = data?.period || {};
   const fy = data?.financialYear || {};
 
   const stats = [
     { label: 'Current balance', value: formatINR(data?.balance), icon: Wallet, tone: 'text-emerald-700 bg-emerald-50' },
-    { label: 'Intakes (this year)', value: formatINR(fy.intake), icon: ArrowUpRight, tone: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Outtakes (this year)', value: formatINR(fy.outtake), icon: ArrowDownRight, tone: 'text-red-600 bg-red-50' },
-    { label: 'Net (this year)', value: formatINR(fy.net), icon: Scale, tone: 'text-blue-700 bg-blue-50' },
-    { label: 'Opening balance', value: formatINR(data?.openingBalance), icon: Wallet, tone: 'text-indigo-700 bg-indigo-50' },
+    { label: `Intakes (${period.from ?? '…'} → ${period.to ?? '…'})`, value: formatINR(period.intake), icon: ArrowUpRight, tone: 'text-emerald-600 bg-emerald-50' },
+    { label: `Outtakes (${period.from ?? '…'} → ${period.to ?? '…'})`, value: formatINR(period.outtake), icon: ArrowDownRight, tone: 'text-red-600 bg-red-50' },
+    { label: 'Net (selected period)', value: formatINR(period.net), icon: Scale, tone: 'text-blue-700 bg-blue-50' },
+    { label: 'Period opening', value: formatINR(period.openingBalance), icon: Wallet, tone: 'text-indigo-700 bg-indigo-50' },
   ];
 
-  if (loading) return <LoadingSpinner label="Loading dashboard…" />;
+  if (loading && !data) return <LoadingSpinner label="Loading dashboard…" />;
 
   return (
     <div>
@@ -98,6 +104,19 @@ export default function Dashboard() {
         }
       />
 
+      <Card pad={false} className="mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="text-sm font-medium text-slate-700">Reporting period</p>
+            <p className="text-xs text-slate-500">Intakes, outtakes, net and the category charts follow this period.</p>
+          </div>
+          <DateRangeFilter
+            defaultMode={DATE_MODES.YEARLY}
+            onChange={setRange}
+          />
+        </div>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         {stats.map((s) => (
           <Card key={s.label} pad={false}>
@@ -113,17 +132,17 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <Card title="Outtakes by category" subtitle={`This financial year (${fy.from ?? '…'} → ${fy.to ?? '…'})`}>
+        <Card title="Outtakes by category" subtitle={`${period.from ?? '…'} → ${period.to ?? '…'}`}>
           {chartData && chartData.labels.length > 0 ? (
             <div className="h-72">
               <Doughnut data={chartData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
             </div>
           ) : (
-            <p className="py-10 text-center text-sm text-slate-500">No outtakes this year yet.</p>
+            <p className="py-10 text-center text-sm text-slate-500">No outtakes in this period yet.</p>
           )}
         </Card>
 
-        <Card title="Category breakdown" subtitle="Net outtakes, this financial year">
+        <Card title="Category breakdown" subtitle="Net outtakes, selected period">
           {breakdownRows && breakdownRows.length > 0 ? (
             <ul className="divide-y divide-slate-100">
               {breakdownRows.slice(0, 8).map((c, i) => (

@@ -156,18 +156,31 @@ export function listCustomerLedger(customerId, {  limit, offset }) {
   }));
 }
 
-export function listPartnerLedger(partnerId, {  limit, offset }) {
-  const where = 't.partner_id = $1 AND t.deleted_at IS NULL AND t.reversed_at IS NULL';
+export function listPartnerLedger(partnerId, { from, to, limit, offset }) {
+  const where = ['t.partner_id = $1', 't.deleted_at IS NULL', 't.reversed_at IS NULL'];
+  const values = [partnerId];
+  let idx = 2;
+  if (from) {
+    values.push(from);
+    where.push(`t.transaction_date >= $${idx}`);
+    idx += 1;
+  }
+  if (to) {
+    values.push(to);
+    where.push(`t.transaction_date <= $${idx}`);
+    idx += 1;
+  }
+  const whereSql = where.join(' AND ');
   const countP = query(
-    `SELECT count(*)::int AS total FROM transactions t WHERE ${where}`,
-    [partnerId],
+    `SELECT count(*)::int AS total FROM transactions t WHERE ${whereSql}`,
+    values,
   );
   const listP = query(
     `SELECT ${TRANSACTION_COLUMNS} ${JOIN_BASE}
-     WHERE ${where}
+     WHERE ${whereSql}
      ORDER BY t.transaction_date ASC, t.id ASC
-     LIMIT $${2} OFFSET $${3}`,
-    [partnerId, limit, offset],
+     LIMIT $${idx} OFFSET $${idx + 1}`,
+    [...values, limit, offset],
   );
   return Promise.all([countP, listP]).then(([c, r]) => ({
     total: c.rows[0].total,
@@ -293,15 +306,27 @@ export async function reverseTransaction(id, { userId, reason, client = null }) 
 const ACTIVE_FLOW_WHERE = `
   deleted_at IS NULL AND reversed_at IS NULL AND is_reversal = false`;
 
-export function partnerInflowTotals(partnerId) {
+export function partnerInflowTotals(partnerId, { from, to } = {}) {
+  const where = ['partner_id = $1', ACTIVE_FLOW_WHERE];
+  const values = [partnerId];
+  let idx = 2;
+  if (from) {
+    values.push(from);
+    where.push(`transaction_date >= $${idx}`);
+    idx += 1;
+  }
+  if (to) {
+    values.push(to);
+    where.push(`transaction_date <= $${idx}`);
+  }
   return query(
     `SELECT
        COALESCE(SUM(amount) FILTER (WHERE source_type = 'partner_capital'), 0)::numeric(14,2) AS capital_contributions,
        COALESCE(SUM(amount) FILTER (WHERE source_type = 'partner_loan'), 0)::numeric(14,2) AS loan_receipts,
        COALESCE(SUM(amount), 0)::numeric(14,2) AS total_inflow
      FROM transactions
-     WHERE partner_id = $1 AND ${ACTIVE_FLOW_WHERE}`,
-    [partnerId],
+     WHERE ${where.join(' AND ')}`,
+    values,
   ).then((r) => r.rows[0]);
 }
 
@@ -380,13 +405,27 @@ export function categoryReport({ from, to }) {
   ).then((r) => r.rows);
 }
 
-export function recentTransactions(limit = 10) {
+export function recentTransactions(limit = 10, { from, to } = {}) {
+  const where = ['t.deleted_at IS NULL'];
+  const values = [];
+  let idx = 1;
+  if (from) {
+    values.push(from);
+    where.push(`t.transaction_date >= $${idx}`);
+    idx += 1;
+  }
+  if (to) {
+    values.push(to);
+    where.push(`t.transaction_date <= $${idx}`);
+    idx += 1;
+  }
+  values.push(limit);
   return query(
     `SELECT ${TRANSACTION_COLUMNS} ${JOIN_BASE}
-     WHERE t.deleted_at IS NULL
-     ORDER BY t.created_at DESC, t.id DESC
-     LIMIT $1`,
-    [limit],
+     WHERE ${where.join(' AND ')}
+     ORDER BY t.transaction_date DESC, t.created_at DESC, t.id DESC
+     LIMIT $${idx}`,
+    values,
   ).then((r) => r.rows);
 }
 

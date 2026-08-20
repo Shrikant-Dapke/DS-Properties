@@ -35,3 +35,5 @@ export const SOURCE_LABELS = Object.freeze({
 });
 
 export const DATE_TODAY = () => new Date().toISOString().slice(0, 10);
+
+export const FINANCIAL_YEAR_START_MONTH = 4; // April — matches the backend

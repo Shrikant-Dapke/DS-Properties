@@ -8,14 +8,14 @@ import { Card } from '../components/common/Card.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
+import { DateRangeFilter } from '../components/common/DateRangeFilter.jsx';
 import { formatINR, formatDate, titleCase } from '../utils/formatters.js';
 import { exportTableToPdf } from '../utils/pdf.js';
 import { exportTableToExcel } from '../utils/excel.js';
 import { DATE_TODAY } from '../utils/constants.js';
+import { DATE_MODES, monthRange, financialYearRange } from '../utils/dateRange.js';
 
 const now = new Date();
-const currentMonth = now.getMonth() + 1;
-const currentYear = now.getFullYear();
 
 function ExportButtons({ pdf, excel }) {
   const toast = useToast();
@@ -59,7 +59,7 @@ function summaryCards(summary) {
   ];
 }
 
-function MonthReport({ year, month }) {
+function MonthReport({ range }) {
   const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,14 +68,14 @@ function MonthReport({ year, month }) {
     let active = true;
     setLoading(true);
     reportApi
-      .monthly({ year, month })
+      .monthly({ from: range.from, to: range.to })
       .then((d) => active && setData(d))
-      .catch(() => toast.error('Failed to load monthly report'))
+      .catch(() => toast.error('Failed to load report'))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [year, month, toast]);
+  }, [range, toast]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -86,6 +86,8 @@ function MonthReport({ year, month }) {
     { key: 'description', label: 'Description', render: (r) => r.description || r.paidTo || '—' },
     { key: 'amount', label: 'Amount', align: 'right', render: (r) => formatINR(r.amount) },
   ];
+
+  const periodLabel = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
 
   return (
     <div>
@@ -102,9 +104,9 @@ function MonthReport({ year, month }) {
         </div>
         <div className="shrink-0">
           <ExportButtons
-            pdf={{ title: 'Monthly Report', subtitle: `${month}/${year}`, columns: txCols, rows: data?.transactions ?? [] }}
+            pdf={{ title: 'Period Report', subtitle: periodLabel, columns: txCols, rows: data?.transactions ?? [] }}
             excel={{
-              filename: `monthly_report_${year}_${month}`,
+              filename: `report_${range.from}_${range.to}`,
               sheets: [
                 {
                   name: 'Transactions',
@@ -134,7 +136,7 @@ function MonthReport({ year, month }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={`Categories · ${month}/${year}`} subtitle="Outtakes by category" pad={false}>
+        <Card title="Categories" subtitle={periodLabel} pad={false}>
           {(data?.categories ?? []).length > 0 ? (
             <table className="w-full text-left text-sm">
               <thead>
@@ -153,11 +155,11 @@ function MonthReport({ year, month }) {
               </tbody>
             </table>
           ) : (
-            <p className="py-8 text-center text-sm text-slate-500">No outtakes this month.</p>
+            <p className="py-8 text-center text-sm text-slate-500">No outtakes in this period.</p>
           )}
         </Card>
 
-        <Card title="Top customers" subtitle="This month's customers" pad={false}>
+        <Card title="Top customers" subtitle={periodLabel} pad={false}>
           {(data?.topCustomers ?? []).length > 0 ? (
             <table className="w-full text-left text-sm">
               <thead>
@@ -176,7 +178,7 @@ function MonthReport({ year, month }) {
               </tbody>
             </table>
           ) : (
-            <p className="py-8 text-center text-sm text-slate-500">No customer receipts this month.</p>
+            <p className="py-8 text-center text-sm text-slate-500">No customer receipts in this period.</p>
           )}
         </Card>
       </div>
@@ -205,7 +207,7 @@ function MonthReport({ year, month }) {
           </tbody>
         </table>
         {(data?.transactions ?? []).length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">No transactions this month.</p>
+          <p className="py-8 text-center text-sm text-slate-500">No transactions in this period.</p>
         )}
       </Card>
     </div>
@@ -309,7 +311,7 @@ function DailyReport({ date }) {
   );
 }
 
-function CategoryReportView({ from, to }) {
+function CategoryReportView({ range }) {
   const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -318,14 +320,14 @@ function CategoryReportView({ from, to }) {
     let active = true;
     setLoading(true);
     reportApi
-      .categories({ from, to })
+      .categories({ from: range.from, to: range.to })
       .then((d) => active && setData(d))
       .catch(() => toast.error('Failed to load category report'))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [from, to, toast]);
+  }, [range, toast]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -340,15 +342,15 @@ function CategoryReportView({ from, to }) {
         <div className="mb-3 flex items-end justify-between gap-3">
           <Card pad={false}>
             <div className="p-4">
-              <p className="text-xs text-slate-500">Total outtake · {formatDate(from)} → {formatDate(to)}</p>
+              <p className="text-xs text-slate-500">Total outtake · {formatDate(range.from)} → {formatDate(range.to)}</p>
               <p className="text-xl font-bold text-red-600">{formatINR(data?.totalOuttake)}</p>
             </div>
           </Card>
           <div className="shrink-0">
             <ExportButtons
-              pdf={{ title: 'Category Report', subtitle: `${from} → ${to}`, columns: catCols, rows: data?.categories ?? [] }}
+              pdf={{ title: 'Category Report', subtitle: `${range.from} → ${range.to}`, columns: catCols, rows: data?.categories ?? [] }}
               excel={{
-                filename: `category_report_${from}_${to}`,
+                filename: `category_report_${range.from}_${range.to}`,
                 sheets: [{ name: 'Categories', columns: catCols, rows: data?.categories ?? [] }],
               }}
             />
@@ -381,7 +383,7 @@ function CategoryReportView({ from, to }) {
   );
 }
 
-function PartnerReportView({ partnerId, partners }) {
+function PartnerReportView({ partnerId, partners, range }) {
   const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -390,15 +392,16 @@ function PartnerReportView({ partnerId, partners }) {
     if (!partnerId) return;
     let active = true;
     setLoading(true);
+    const params = range.from ? { from: range.from, to: range.to } : {};
     reportApi
-      .partner(partnerId)
+      .partner(partnerId, params)
       .then((d) => active && setData(d))
       .catch(() => toast.error('Failed to load partner report'))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [partnerId, toast]);
+  }, [partnerId, range, toast]);
 
   if (!partnerId) return <p className="py-10 text-center text-sm text-slate-500">Select a partner to see their report.</p>;
   if (loading) return <LoadingSpinner />;
@@ -412,6 +415,7 @@ function PartnerReportView({ partnerId, partners }) {
 
   const partnerLabel = partners.find((p) => p.publicId === partnerId)?.name || partnerId;
   const partnerFile = partnerLabel.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+  const periodSubtitle = range.from ? `${range.from} → ${range.to}` : 'All-time';
 
   return (
     <div>
@@ -438,7 +442,7 @@ function PartnerReportView({ partnerId, partners }) {
         </div>
         <div className="shrink-0">
           <ExportButtons
-            pdf={{ title: `Partner Report — ${partnerLabel}`, subtitle: 'All-time', columns: ledgerCols, rows: data?.ledger?.rows ?? [] }}
+            pdf={{ title: `Partner Report — ${partnerLabel}`, subtitle: periodSubtitle, columns: ledgerCols, rows: data?.ledger?.rows ?? [] }}
             excel={{
               filename: `partner_report_${partnerFile}`,
               sheets: [{ name: 'Ledger', columns: ledgerCols, rows: data?.ledger?.rows ?? [] }],
@@ -480,11 +484,10 @@ function PartnerReportView({ partnerId, partners }) {
 export default function Reports() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('monthly');
-  const [month, setMonth] = useState(currentMonth);
-  const [year, setYear] = useState(currentYear);
   const [date, setDate] = useState(DATE_TODAY());
-  const [from, setFrom] = useState(`${currentYear - 1}-04-01`);
-  const [to, setTo] = useState(`${currentYear}-03-31`);
+  const [monthlyRange, setMonthlyRange] = useState(() => ({ mode: DATE_MODES.MONTHLY, ...monthRange(now) }));
+  const [categoryRange, setCategoryRange] = useState(() => ({ mode: DATE_MODES.YEARLY, ...financialYearRange(now) }));
+  const [partnerRange, setPartnerRange] = useState({ mode: DATE_MODES.CUSTOM, from: '', to: '' });
   const [partners, setPartners] = useState([]);
   const [partnerId, setPartnerId] = useState('');
 
@@ -522,43 +525,34 @@ export default function Reports() {
         </div>
 
         {activeTab === 'monthly' && (
-          <>
-            <Input label="Year" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-28" />
-            <Select label="Month" value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-32">
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>
-                  {new Date(2000, m - 1, 1).toLocaleString('en', { month: 'long' })}
-                </option>
-              ))}
-            </Select>
-          </>
+          <DateRangeFilter defaultMode={DATE_MODES.MONTHLY} onChange={setMonthlyRange} />
         )}
 
         {activeTab === 'daily' && <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
 
         {activeTab === 'categories' && (
-          <>
-            <Input label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            <Input label="To" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </>
+          <DateRangeFilter defaultMode={DATE_MODES.YEARLY} onChange={setCategoryRange} />
         )}
 
         {activeTab === 'partner' && (
-          <Select label="Partner" value={partnerId} onChange={(e) => setPartnerId(e.target.value)} className="w-64">
-            <option value="">Select partner…</option>
-            {partners.map((p) => (
-              <option key={p.publicId} value={p.publicId}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select label="Partner" value={partnerId} onChange={(e) => setPartnerId(e.target.value)} className="w-64">
+              <option value="">Select partner…</option>
+              {partners.map((p) => (
+                <option key={p.publicId} value={p.publicId}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+            <DateRangeFilter defaultMode={DATE_MODES.CUSTOM} allowEmpty onChange={setPartnerRange} />
+          </>
         )}
       </div>
 
-      {activeTab === 'monthly' && <MonthReport year={year} month={month} />}
+      {activeTab === 'monthly' && <MonthReport range={monthlyRange} />}
       {activeTab === 'daily' && <DailyReport date={date} />}
-      {activeTab === 'categories' && <CategoryReportView from={from} to={to} />}
-      {activeTab === 'partner' && <PartnerReportView partnerId={partnerId} partners={partners} />}
+      {activeTab === 'categories' && <CategoryReportView range={categoryRange} />}
+      {activeTab === 'partner' && <PartnerReportView partnerId={partnerId} partners={partners} range={partnerRange} />}
     </div>
   );
 }

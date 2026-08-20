@@ -4,7 +4,7 @@ import {
   SOURCE_TYPES,
   TRANSACTION_TYPES,
 } from '../config/constants.js';
-import { dateStringSchema, publicIdSchema } from './common.js';
+import { dateStringSchema, publicIdSchema, dateOrderCheck } from './common.js';
 
 const amountSchema = Joi.number().positive().precision(2).max(999999999999).required();
 
@@ -46,7 +46,7 @@ export const listTransactionQuerySchema = Joi.object({
   categoryId: Joi.string().uuid({ version: 'uuidv4' }).optional(),
   from: dateStringSchema.optional(),
   to: dateStringSchema.optional(),
-});
+}).custom(dateOrderCheck);
 
 const optionalAmountSchema = Joi.number().positive().precision(2).max(999999999999).optional();
 

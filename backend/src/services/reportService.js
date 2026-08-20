@@ -66,30 +66,42 @@ export async function getDailyReport({ date }) {
   };
 }
 
-export async function getMonthlyReport({ year, month }) {
-  const y = Number.parseInt(year, 10);
-  const m = Number.parseInt(month, 10);
-  if (Number.isNaN(y) || Number.isNaN(m) || m < 1 || m > 12) {
-    throw new ValidationError('Invalid year or month');
+export async function getMonthlyReport({ year, month, from, to }) {
+  let y = null;
+  let m = null;
+  let rangeFrom;
+  let rangeTo;
+
+  if (from && to) {
+    // Explicit inclusive period (weekly / yearly / custom).
+    if (!validDate(from) || !validDate(to)) throw new ValidationError('Invalid date range');
+    if (from > to) throw new ValidationError('From date must not be after To date');
+    rangeFrom = from;
+    rangeTo = to;
+  } else {
+    y = Number.parseInt(year, 10);
+    m = Number.parseInt(month, 10);
+    if (Number.isNaN(y) || Number.isNaN(m) || m < 1 || m > 12) {
+      throw new ValidationError('Invalid year or month');
+    }
+    rangeFrom = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getDate();
+    rangeTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   }
 
-  const from = `${y}-${String(m).padStart(2, '0')}-01`;
-  const lastDay = new Date(Date.UTC(y, m, 0)).getDate();
-  const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
   const [summary, transactions, categories, customers, openingBalance] = await Promise.all([
-    periodSummary({ from, to }),
-    monthlyTransactions({ from, to, page: 1, limit: 1000, offset: 0 }),
-    categoryReport({ from, to }),
-    customerReport({ from, to }),
+    periodSummary({ from: rangeFrom, to: rangeTo }),
+    monthlyTransactions({ from: rangeFrom, to: rangeTo, page: 1, limit: 1000, offset: 0 }),
+    categoryReport({ from: rangeFrom, to: rangeTo }),
+    customerReport({ from: rangeFrom, to: rangeTo }),
     getOpeningBalance(),
   ]);
 
   return {
     year: y,
     month: m,
-    from,
-    to,
+    from: rangeFrom,
+    to: rangeTo,
     summary: {
       intake: summary.total_intake,
       outtake: summary.total_outtake,
@@ -114,17 +126,24 @@ export async function getCategoryReport({ from, to }) {
   return { from, to, totalOuttake: total, categories: rows };
 }
 
-export async function getPartnerFinancialReport(publicId, { page, limit, offset }) {
+export async function getPartnerFinancialReport(publicId, { from, to, page, limit, offset }) {
   const partner = await findPartnerByPublicId(publicId);
   if (!partner) throw new NotFoundError('Partner not found');
+  if (from && to) {
+    if (!validDate(from) || !validDate(to)) throw new ValidationError('Invalid date range');
+    if (from > to) throw new ValidationError('From date must not be after To date');
+  }
 
+  const range = from && to ? { from, to } : {};
   const [totals, ledger] = await Promise.all([
-    partnerInflowTotals(partner.id),
-    listPartnerLedger(partner.id, { page, limit, offset }),
+    partnerInflowTotals(partner.id, range),
+    listPartnerLedger(partner.id, { ...range, page, limit, offset }),
   ]);
 
   return {
     publicId,
+    from: range.from ?? null,
+    to: range.to ?? null,
     totals: {
       capitalContributions: totals.capital_contributions,
       loanReceipts: totals.loan_receipts,

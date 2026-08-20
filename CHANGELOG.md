@@ -2,6 +2,69 @@
 
 All notable changes to DS Properties V4.
 
+## [0.2.0] — 2026-08-20
+
+Consistent date-range filtering across Dashboard, Transactions, and Reports: every page
+that lists, aggregates, or reports transactions now supports Daily / Weekly / Monthly /
+Yearly / Custom quick modes (plus From/To), with the backend as the single source of truth
+for filtering.
+
+### Added
+
+**Backend**
+- `from` / `to` query parameters on transactions list, partner ledger, dashboard summary +
+  category breakdown, and the monthly / category-range / partner-financial reports.
+- Monthly report accepts either `year` + `month` (existing) or `from` + `to` (new,
+  takes precedence).
+- Dashboard `summary` response gains a `period` object with `from`, `to`, `openingBalance`
+  (settings opening balance + net up to the day before the period), and the period's
+  intake / outtake / net / customer intake / partner capital / partner loan / counts;
+  `recentTransactions` is scoped to the selected period.
+- New shared validators: `optionalDateRangeSchema` / `requiredDateRangeSchema`,
+  `dateOrderCheck` (rejects `from > to`), `dateRangePresenceCheck` (both or neither);
+  list endpoints allow single-sided ranges, aggregate/report endpoints require both or
+  neither.
+- Cache keys for dashboard summary and category breakdown now embed `from` / `to`, so
+  ranges never bleed across one another; `invalidateFinancialCache()` clears all
+  `financial:*` entries on any financial mutation.
+- New `utils/dateRange.js` (`financialYearRange`, `addDays`, `assertValidRange`).
+
+**Frontend**
+- New reusable `DateRangeFilter` component (Daily / Weekly / Monthly / Yearly / Custom +
+  From/To) with inline validation ("From date must not be after To date", "Select both
+  From and To dates"). It skips no-op mount emissions and never emits a half-filled
+  custom range.
+- Shared `utils/dateRange.js` (`DATE_MODES`, `financialYearRange`, `isoWeekRange` Monday
+  start, `monthRange`, `rangeForMode`, `isValidRange`, `formatRangeLabel`).
+- Dashboard: default current financial year (Apr–Mar), period stat cards, range-aware
+  chart + recent entries.
+- Transactions: From/To replaced by `DateRangeFilter` (Custom + All dates default);
+  selecting a mode or filling a custom range auto-applies and resets pagination.
+- Reports: monthly tab uses Monthly mode, categories tab uses Yearly mode, partner tab
+  uses Custom (+ All dates); export subtitles show the active range.
+
+### Tests
+
+- Backend: 14 new integration tests (`tests/integration/dateRange.test.js`) covering
+  inclusive boundaries, `from > to` rejection, malformed dates, monthly `from/to` ===
+  `year+month` equivalence, single-sided rejection, category report ordering, partner
+  range scoping, dashboard FY default, period aggregates + opening carry-forward,
+  cache isolation across ranges, and create/update/reverse cache invalidation. Suite
+  total: 65 tests.
+- Frontend: 22 `utils/dateRange` unit tests + 7 `DateRangeFilter` component tests. Suite
+  total: 44 tests.
+
+### Verified
+
+- Live API against the dev DB (seeded fixture data): FY, monthly, weekly, daily, and
+  custom ranges all return correct intake/outtake/net/opening numbers; transactions list,
+  reports, category breakdown, and partner report all honor the range.
+- Live browser: login → dashboard renders with the FY default (`2026-04-01` –
+  `2027-03-31`); switching to Monthly / Weekly / Custom issues backend requests with the
+  exact expected `from`/`to`; Transactions auto-applies the selected range and resets
+  pagination; Reports monthly/categories/partner tabs each send their default or custom
+  range.
+
 ## [0.1.2] — 2026-08-20
 
 Critical session-stability fix — "Save Entry → redirected to Login" regression.

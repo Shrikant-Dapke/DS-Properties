@@ -6,6 +6,7 @@ import {
   dailyReportQuerySchema,
   monthlyReportQuerySchema,
   rangeReportQuerySchema,
+  partnerReportQuerySchema,
 } from '../validators/reportValidators.js';
 import {
   dailyReport,
@@ -21,6 +22,6 @@ router.use(authenticate);
 router.get('/daily', validate(dailyReportQuerySchema, 'query'), dailyReport);
 router.get('/monthly', validate(monthlyReportQuerySchema, 'query'), monthlyReport);
 router.get('/categories', validate(rangeReportQuerySchema, 'query'), categoryReport);
-router.get('/partners/:id', validate(publicIdParamSchema, 'params'), partnerReport);
+router.get('/partners/:id', validate(publicIdParamSchema, 'params'), validate(partnerReportQuerySchema, 'query'), partnerReport);
 
 export default router;
