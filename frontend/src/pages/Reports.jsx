@@ -490,8 +490,8 @@ export default function Reports() {
 
   useEffect(() => {
     partnerApi
-      .list({ limit: 500 })
-      .then((d) => setPartners(d.rows || []))
+      .listAll()
+      .then(setPartners)
       .catch(() => toast.error('Failed to load partners'));
   }, [toast]);
 

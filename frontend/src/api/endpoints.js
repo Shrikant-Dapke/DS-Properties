@@ -5,6 +5,17 @@ const post = (url, body) => api.post(url, body).then((r) => r.data.data);
 const put = (url, body) => api.put(url, body).then((r) => r.data.data);
 const del = (url, body) => api.delete(url, { data: body }).then((r) => r.data.data);
 
+async function fetchAllPages(fetchPage, maxPages = 50) {
+  const all = [];
+  let page = 1;
+  for (; page <= maxPages; page += 1) {
+    const { rows, pagination } = await fetchPage({ page, limit: 100 });
+    all.push(...rows);
+    if (!pagination?.hasNext) break;
+  }
+  return all;
+}
+
 export const dashboardApi = {
   summary: () => get('/dashboard/summary'),
   categoryBreakdown: () => get('/dashboard/categories'),
@@ -12,6 +23,7 @@ export const dashboardApi = {
 
 export const customerApi = {
   list: (params) => get('/customers', params),
+  listAll: () => fetchAllPages((p) => get('/customers', p)),
   get: (publicId) => get(`/customers/${publicId}`),
   create: (body) => post('/customers', body),
   update: (publicId, body) => put(`/customers/${publicId}`, body),
@@ -21,6 +33,7 @@ export const customerApi = {
 
 export const partnerApi = {
   list: (params) => get('/partners', params),
+  listAll: (params = {}) => fetchAllPages((p) => get('/partners', { ...params, ...p })),
   get: (publicId) => get(`/partners/${publicId}`),
   create: (body) => post('/partners', body),
   update: (publicId, body) => put(`/partners/${publicId}`, body),

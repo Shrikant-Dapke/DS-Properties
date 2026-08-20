@@ -45,20 +45,57 @@ export default function AddEntry() {
   const [loading, setLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(Boolean(editId));
   const [duplicate, setDuplicate] = useState(null);
+  const [loadErrors, setLoadErrors] = useState({ customers: false, partners: false, categories: false });
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isOuttake = form.transactionType === TRANSACTION_TYPES.OUTTAKE;
   const isCustomer = form.sourceType === SOURCE_TYPES.CUSTOMER;
   const needsPartner = [SOURCE_TYPES.PARTNER_CAPITAL, SOURCE_TYPES.PARTNER_LOAN].includes(form.sourceType);
 
   useEffect(() => {
-    Promise.all([customerApi.list({ limit: 500 }), partnerApi.list({ limit: 500, activeOnly: true }), categoryApi.active()])
-      .then(([c, p, cat]) => {
-        setCustomers(c.rows || []);
-        setPartners(p.rows || []);
-        setCategories(cat || []);
+    let active = true;
+    customerApi
+      .listAll()
+      .then((rows) => {
+        if (!active) return;
+        setCustomers(rows);
+        setLoadErrors((e) => ({ ...e, customers: false }));
       })
-      .catch(() => toast.error('Could not load options'));
-  }, [toast]);
+      .catch((err) => {
+        if (!active) return;
+        console.error('AddEntry: failed to load customers', err?.message || err);
+        setLoadErrors((e) => ({ ...e, customers: true }));
+      });
+    partnerApi
+      .listAll({ activeOnly: true })
+      .then((rows) => {
+        if (!active) return;
+        setPartners(rows);
+        setLoadErrors((e) => ({ ...e, partners: false }));
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('AddEntry: failed to load partners', err?.message || err);
+        setLoadErrors((e) => ({ ...e, partners: true }));
+      });
+    categoryApi
+      .active()
+      .then((cat) => {
+        if (!active) return;
+        setCategories(cat || []);
+        setLoadErrors((e) => ({ ...e, categories: false }));
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('AddEntry: failed to load categories', err?.message || err);
+        setLoadErrors((e) => ({ ...e, categories: true }));
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const reloadOptions = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
     if (!editId) return;
@@ -223,6 +260,38 @@ export default function AddEntry() {
                     ))}
                   </Select>
                 )}
+                {isCustomer && loadErrors.customers && (
+                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                    Could not load customers.{' '}
+                    <button type="button" className="underline" onClick={reloadOptions}>
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {isCustomer && !loadErrors.customers && activeCustomers.length === 0 && (
+                  <div className="col-span-2 text-xs text-slate-500">
+                    No customers yet.{' '}
+                    <Link to="/customers" className="font-medium text-emerald-700 hover:underline">
+                      Add a customer
+                    </Link>
+                  </div>
+                )}
+                {needsPartner && loadErrors.partners && (
+                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                    Could not load partners.{' '}
+                    <button type="button" className="underline" onClick={reloadOptions}>
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {needsPartner && !loadErrors.partners && activePartners.length === 0 && (
+                  <div className="col-span-2 text-xs text-slate-500">
+                    No partners yet.{' '}
+                    <Link to="/partners" className="font-medium text-emerald-700 hover:underline">
+                      Add a partner
+                    </Link>
+                  </div>
+                )}
               </>
             )}
 
@@ -249,6 +318,22 @@ export default function AddEntry() {
                   ))}
                 </Select>
                 <Input label="Paid to" id="paidTo" value={form.paidTo} onChange={set('paidTo')} placeholder="Payee name" required />
+                {loadErrors.categories && (
+                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                    Could not load categories.{' '}
+                    <button type="button" className="underline" onClick={reloadOptions}>
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {!loadErrors.categories && categories.length === 0 && (
+                  <div className="col-span-2 text-xs text-slate-500">
+                    No categories yet.{' '}
+                    <Link to="/categories" className="font-medium text-emerald-700 hover:underline">
+                      Add a category
+                    </Link>
+                  </div>
+                )}
               </>
             )}
 
