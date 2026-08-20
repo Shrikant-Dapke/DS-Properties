@@ -6,6 +6,7 @@ import {
   categoryReport,
   customerReport,
   listPartnerLedger,
+  partnerInflowTotals,
 } from '../models/transactionModel.js';
 import { getOpeningBalance } from '../models/settingsModel.js';
 import { findPartnerByPublicId } from '../models/partnerModel.js';
@@ -117,22 +118,17 @@ export async function getPartnerFinancialReport(publicId, { page, limit, offset 
   const partner = await findPartnerByPublicId(publicId);
   if (!partner) throw new NotFoundError('Partner not found');
 
-  const ledger = await listPartnerLedger(partner.id, { page, limit, offset });
-
-  const partnerTx = ledger.rows;
-  const capital = partnerTx
-    .filter((t) => t.source_type === 'partner_capital')
-    .reduce((acc, t) => acc + Number(t.amount), 0);
-  const loans = partnerTx
-    .filter((t) => t.source_type === 'partner_loan')
-    .reduce((acc, t) => acc + Number(t.amount), 0);
+  const [totals, ledger] = await Promise.all([
+    partnerInflowTotals(partner.id),
+    listPartnerLedger(partner.id, { page, limit, offset }),
+  ]);
 
   return {
     publicId,
     totals: {
-      capitalContributions: capital,
-      loanReceipts: loans,
-      totalInflow: Number(capital) + Number(loans),
+      capitalContributions: totals.capital_contributions,
+      loanReceipts: totals.loan_receipts,
+      totalInflow: totals.total_inflow,
     },
     ledger: {
       total: ledger.total,

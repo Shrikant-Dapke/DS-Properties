@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { customerApi, partnerApi, categoryApi, transactionApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.js';
@@ -7,6 +7,7 @@ import { Button } from '../components/common/Button.jsx';
 import { Input } from '../components/common/Input.jsx';
 import { Select } from '../components/common/Select.jsx';
 import { Card } from '../components/common/Card.jsx';
+import { Modal } from '../components/common/Modal.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import {
   PAYMENT_MODES,
@@ -34,12 +35,16 @@ const emptyForm = {
 export default function AddEntry() {
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+
   const [form, setForm] = useState(emptyForm);
   const [customers, setCustomers] = useState([]);
   const [partners, setPartners] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [warning, setWarning] = useState('');
+  const [loadingEdit, setLoadingEdit] = useState(Boolean(editId));
+  const [duplicate, setDuplicate] = useState(null);
 
   const isOuttake = form.transactionType === TRANSACTION_TYPES.OUTTAKE;
   const isCustomer = form.sourceType === SOURCE_TYPES.CUSTOMER;
@@ -55,37 +60,93 @@ export default function AddEntry() {
       .catch(() => toast.error('Could not load options'));
   }, [toast]);
 
+  useEffect(() => {
+    if (!editId) return;
+    let active = true;
+    transactionApi
+      .get(editId)
+      .then((tx) => {
+        if (!active) return;
+        setForm({
+          transactionType: tx.transactionType,
+          sourceType: tx.sourceType || SOURCE_TYPES.CUSTOMER,
+          customerPublicId: tx.customer?.publicId || '',
+          partnerPublicId: tx.partner?.publicId || '',
+          amount: tx.amount,
+          paymentMode: tx.paymentMode,
+          transactionDate: tx.transactionDate,
+          referenceNumber: tx.referenceNumber || '',
+          plotNumber: tx.plotNumber || '',
+          paidTo: tx.paidTo || '',
+          description: tx.description || '',
+          expenseCategoryId: tx.category?.publicId || '',
+        });
+      })
+      .catch(() => toast.error('Could not load entry to edit'))
+      .finally(() => active && setLoadingEdit(false));
+    return () => {
+      active = false;
+    };
+  }, [editId, toast]);
+
   const activeCustomers = useMemo(() => customers, [customers]);
   const activePartners = useMemo(() => partners, [partners]);
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value, warning: '' }));
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const switchToOuttake = () =>
+    setForm((f) => ({
+      ...f,
+      transactionType: TRANSACTION_TYPES.OUTTAKE,
+      sourceType: '',
+      customerPublicId: '',
+      partnerPublicId: '',
+    }));
+
+  const switchToIntake = () =>
+    setForm((f) => ({
+      ...f,
+      transactionType: TRANSACTION_TYPES.INTAKE,
+      sourceType: f.sourceType || SOURCE_TYPES.CUSTOMER,
+    }));
+
+  const buildPayload = () => {
+    const base = {
+      transactionType: form.transactionType,
+      amount: Number(form.amount),
+      paymentMode: form.paymentMode,
+      transactionDate: form.transactionDate,
+      referenceNumber: form.referenceNumber || undefined,
+      plotNumber: form.plotNumber || undefined,
+      description: form.description || undefined,
+    };
+    if (isOuttake) {
+      base.categoryPublicId = form.expenseCategoryId;
+      base.paidTo = form.paidTo || undefined;
+      return base;
+    }
+    base.sourceType = form.sourceType;
+    if (isCustomer) base.customerPublicId = form.customerPublicId;
+    if (needsPartner) base.partnerPublicId = form.partnerPublicId;
+    return base;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setWarning('');
     setLoading(true);
     try {
-      const payload = {
-        transactionType: form.transactionType,
-        sourceType: form.sourceType,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        transactionDate: form.transactionDate,
-        referenceNumber: form.referenceNumber || undefined,
-        plotNumber: form.plotNumber || undefined,
-        paidTo: form.paidTo || undefined,
-        description: form.description || undefined,
-      };
-      if (isCustomer) payload.customerPublicId = form.customerPublicId;
-      if (needsPartner) payload.partnerPublicId = form.partnerPublicId;
-      if (isOuttake) payload.categoryPublicId = form.expenseCategoryId || undefined;
+      const payload = buildPayload();
+      const result = editId ? await transactionApi.update(editId, payload) : await transactionApi.create(payload);
 
-      const result = await transactionApi.create(payload);
-      if (result.duplicateWarning) {
-        const n = result.duplicates?.length || 0;
-        setWarning(`A similar entry was already recorded in the last 15 minutes (${n} possible duplicate${n === 1 ? '' : 's'}). You may review it in Transactions.`);
+      if (result?.duplicateWarning) {
+        setDuplicate({
+          count: result.duplicates?.length || 0,
+          onContinue: () => navigate('/transactions'),
+        });
+        return;
       }
-      toast.success(isOuttake ? 'Outtake recorded' : 'Intake recorded');
+
+      toast.success(editId ? 'Entry updated' : isOuttake ? 'Outtake recorded' : 'Intake recorded');
       navigate('/transactions');
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to save entry');
@@ -94,16 +155,27 @@ export default function AddEntry() {
     }
   };
 
+  if (loadingEdit) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <PageHeader title="Edit Entry" subtitle="Loading entry…" />
+        <Card>
+          <p className="py-8 text-center text-sm text-slate-500">Loading entry…</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Add Entry" subtitle="Record an intake or outtake" />
+      <PageHeader title={editId ? 'Edit Entry' : 'Add Entry'} subtitle={editId ? 'Update an existing entry' : 'Record an intake or outtake'} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Card>
           <div className="mb-4 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setForm((f) => ({ ...f, transactionType: TRANSACTION_TYPES.INTAKE }))}
+              onClick={switchToIntake}
               className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
                 !isOuttake ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
               }`}
@@ -112,7 +184,7 @@ export default function AddEntry() {
             </button>
             <button
               type="button"
-              onClick={() => setForm((f) => ({ ...f, transactionType: TRANSACTION_TYPES.OUTTAKE }))}
+              onClick={switchToOuttake}
               className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
                 isOuttake ? 'border-red-600 bg-red-50 text-red-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
               }`}
@@ -122,32 +194,36 @@ export default function AddEntry() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Source" id="sourceType" value={form.sourceType} onChange={set('sourceType')}>
-              <option value={SOURCE_TYPES.CUSTOMER}>{SOURCE_LABELS.customer}</option>
-              <option value={SOURCE_TYPES.PARTNER_CAPITAL}>{SOURCE_LABELS.partner_capital}</option>
-              <option value={SOURCE_TYPES.PARTNER_LOAN}>{SOURCE_LABELS.partner_loan}</option>
-            </Select>
+            {!isOuttake && (
+              <>
+                <Select label="Source" id="sourceType" value={form.sourceType} onChange={set('sourceType')}>
+                  <option value={SOURCE_TYPES.CUSTOMER}>{SOURCE_LABELS.customer}</option>
+                  <option value={SOURCE_TYPES.PARTNER_CAPITAL}>{SOURCE_LABELS.partner_capital}</option>
+                  <option value={SOURCE_TYPES.PARTNER_LOAN}>{SOURCE_LABELS.partner_loan}</option>
+                </Select>
 
-            {isCustomer ? (
-              <Select label="Customer" id="customerPublicId" value={form.customerPublicId} onChange={set('customerPublicId')} required>
-                <option value="">Select customer…</option>
-                {activeCustomers.map((c) => (
-                  <option key={c.publicId} value={c.publicId}>
-                    {c.name}
-                    {c.phone ? ` — ${c.phone}` : ''}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <Select label="Partner" id="partnerPublicId" value={form.partnerPublicId} onChange={set('partnerPublicId')} required>
-                <option value="">Select partner…</option>
-                {activePartners.map((p) => (
-                  <option key={p.publicId} value={p.publicId}>
-                    {p.name}
-                    {p.phone ? ` — ${p.phone}` : ''}
-                  </option>
-                ))}
-              </Select>
+                {isCustomer ? (
+                  <Select label="Customer" id="customerPublicId" value={form.customerPublicId} onChange={set('customerPublicId')} required>
+                    <option value="">Select customer…</option>
+                    {activeCustomers.map((c) => (
+                      <option key={c.publicId} value={c.publicId}>
+                        {c.name}
+                        {c.phone ? ` — ${c.phone}` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Select label="Partner" id="partnerPublicId" value={form.partnerPublicId} onChange={set('partnerPublicId')} required>
+                    <option value="">Select partner…</option>
+                    {activePartners.map((p) => (
+                      <option key={p.publicId} value={p.publicId}>
+                        {p.name}
+                        {p.phone ? ` — ${p.phone}` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </>
             )}
 
             <Input label="Amount (₹)" id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} placeholder="0.00" required />
@@ -163,43 +239,63 @@ export default function AddEntry() {
             <Input label="Date" id="transactionDate" type="date" value={form.transactionDate} onChange={set('transactionDate')} required />
 
             {isOuttake && (
-              <Select label="Expense category" id="expenseCategoryId" value={form.expenseCategoryId} onChange={set('expenseCategoryId')} required>
-                <option value="">Select category…</option>
-                {categories.map((c) => (
-                  <option key={c.publicId} value={c.publicId}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+              <>
+                <Select label="Expense category" id="expenseCategoryId" value={form.expenseCategoryId} onChange={set('expenseCategoryId')} required>
+                  <option value="">Select category…</option>
+                  {categories.map((c) => (
+                    <option key={c.publicId} value={c.publicId}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+                <Input label="Paid to" id="paidTo" value={form.paidTo} onChange={set('paidTo')} placeholder="Payee name" required />
+              </>
             )}
 
             <Input label="Reference number" id="referenceNumber" value={form.referenceNumber} onChange={set('referenceNumber')} placeholder="Optional" />
             <Input label="Plot number" id="plotNumber" value={form.plotNumber} onChange={set('plotNumber')} placeholder="Optional" />
-            {isOuttake && <Input label="Paid to" id="paidTo" value={form.paidTo} onChange={set('paidTo')} placeholder="Payee name" required />}
             <Input label="Description" id="description" value={form.description} onChange={set('description')} placeholder="Optional note" />
           </div>
 
           <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
             <span className="text-xs text-slate-500">
-              {isCustomer ? (
+              {isOuttake ? (
+                <>Category missing? <Link to="/categories" className="font-medium text-emerald-700 hover:underline">Manage categories</Link></>
+              ) : isCustomer ? (
                 <>Customer not listed? <Link to="/customers" className="font-medium text-emerald-700 hover:underline">Add a customer</Link></>
               ) : (
                 <>Partner not listed? <Link to="/partners" className="font-medium text-emerald-700 hover:underline">Add a partner</Link></>
               )}
             </span>
             <Button type="submit" variant={isOuttake ? 'danger' : 'primary'} loading={loading}>
-              Save entry
+              {editId ? 'Update entry' : 'Save entry'}
             </Button>
           </div>
         </Card>
-
-        {warning && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{warning}</span>
-          </div>
-        )}
       </form>
+
+      <Modal
+        open={Boolean(duplicate)}
+        onClose={() => setDuplicate(null)}
+        title="Possible duplicate entry"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDuplicate(null)}>
+              Stay here
+            </Button>
+            <Button onClick={() => duplicate?.onContinue()}>Continue to transactions</Button>
+          </>
+        }
+      >
+        <div className="flex items-start gap-2 text-sm text-amber-800">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            A similar entry was already recorded in the last 15 minutes ({duplicate?.count || 0} possible duplicate
+            {duplicate?.count === 1 ? '' : 's'}). Your entry has been saved, but please review it before recording more
+            entries.
+          </span>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -46,6 +46,7 @@ Default admin login: **admin / Admin@123** (change it after first login).
 | backend | `npm run lint` | ESLint on `src/` |
 | backend | `npm run smoke` | In-process API smoke test against dev DB |
 | frontend | `npm run dev` / `build` / `lint` | Dev server / production build / lint |
+| frontend | `npm test` | Vitest component tests (jsdom) |
 
 > Jest must run with `--experimental-vm-modules` (already wired in `package.json`).
 
@@ -65,9 +66,9 @@ Default admin login: **admin / Admin@123** (change it after first login).
   exclude deleted, reversed, and reversal rows, so balances never double-count.
 - **Duplicate detection**: entries matching an amount + party + type within 15 minutes
   are flagged with a warning, never rejected.
-- **Roles**: `admin` (everything), `operator` (create/edit entries, customers, partners),
-  `viewer` (read-only). Destructive actions (delete/reverse entries, delete records)
-  require admin.
+- **Roles**: `admin` (everything), `operator` (create and edit entries; create customers
+  and partners), `viewer` (read-only). Editing customers/partners and destructive actions
+  (delete/reverse entries, delete records) require admin.
 - **Lockout**: 5 consecutive failed logins locks the account for ~15 minutes.
 - **Token security**: 15-minute access tokens, rotating refresh tokens (hashed at rest,
   stored with a family chain for reuse detection).
@@ -114,7 +115,7 @@ require `Authorization: Bearer <accessToken>`.
 - `partners` — CRUD + ledger
 - `categories` — CRUD + `GET /categories/active`
 - `transactions` — CRUD + `POST /transactions/:id/reverse` (admin password required for
-  delete/reverse)
+  delete/reverse; `PATCH /:id` edits an entry, admin + operator)
 - `dashboard` — summary + category breakdown (cached)
 - `reports` — daily, monthly, category range, partner financial
 - `settings` — list/update app settings (admin)

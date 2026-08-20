@@ -4,6 +4,7 @@ import {
   listTransactions,
   findPotentialDuplicates,
   softDeleteTransaction,
+  updateTransaction,
   reverseTransaction as modelReverseTransaction,
 } from '../models/transactionModel.js';
 import { findCustomerByPublicId } from '../models/customerModel.js';
@@ -150,6 +151,56 @@ function validateClassification(tx) {
 export async function getAllTransactions(filters, { page, limit, offset }) {
   const { total, rows } = await listTransactions({ ...filters, page, limit, offset });
   return { total, rows: rows.map(serialize) };
+}
+
+export async function updateExistingTransaction(publicId, data, ctx) {
+  const tx = await findTransactionByPublicId(publicId);
+  if (!tx || tx.deleted_at) throw new NotFoundError('Transaction not found');
+  if (tx.reversed_at) throw new ConflictError('Transaction is already reversed', 'ALREADY_REVERSED');
+  if (tx.is_reversal) throw new ConflictError('Reversal records cannot be edited', 'IS_REVERSAL');
+
+  const refs = await resolveReferences({
+    customerPublicId: data.customerPublicId,
+    partnerPublicId: data.partnerPublicId,
+    categoryPublicId: data.categoryPublicId,
+  });
+
+  const merged = {
+    transaction_type: data.transactionType ?? tx.transaction_type,
+    source_type: data.sourceType !== undefined ? data.sourceType : tx.source_type,
+    customer_id: refs.customerId ?? tx.customer_id,
+    partner_id: refs.partnerId ?? tx.partner_id,
+    expense_category_id: refs.categoryId ?? tx.expense_category_id,
+    amount: data.amount ?? tx.amount,
+    payment_mode: data.paymentMode ?? tx.payment_mode,
+    transaction_date: data.transactionDate ?? tx.transaction_date,
+    reference_number: data.referenceNumber !== undefined ? data.referenceNumber : tx.reference_number,
+    plot_number: data.plotNumber !== undefined ? data.plotNumber : tx.plot_number,
+    paid_to: data.paidTo !== undefined ? data.paidTo : tx.paid_to,
+    description: data.description !== undefined ? data.description : tx.description,
+  };
+
+  validateClassification(merged);
+
+  const updated = await updateTransaction(tx.id, merged);
+
+  await logAudit({
+    userId: ctx.userId,
+    action: AUDIT_ACTIONS.UPDATE,
+    domain: 'transactions',
+    recordId: tx.public_id,
+    oldValues: { type: tx.transaction_type, source: tx.source_type, amount: tx.amount, date: tx.transaction_date },
+    newValues: {
+      type: updated.transaction_type,
+      source: updated.source_type,
+      amount: updated.amount,
+      date: updated.transaction_date,
+    },
+    ip: ctx.ip,
+    userAgent: ctx.userAgent,
+  });
+
+  return serialize(updated);
 }
 
 export async function getTransaction(publicId) {

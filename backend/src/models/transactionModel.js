@@ -2,6 +2,7 @@ import { query, pool } from '../config/database.js';
 
 export const TRANSACTION_COLUMNS = `
   t.id, t.public_id, t.transaction_type, t.source_type,
+  t.customer_id, t.partner_id, t.expense_category_id, t.created_by,
   t.amount, t.payment_mode, t.transaction_date, t.reference_number,
   t.plot_number, t.paid_to, t.description,
   t.is_reversal, t.reversed_from_id, t.reversed_at, t.reversal_reason,
@@ -200,6 +201,40 @@ export async function softDeleteTransaction(id) {
   ).then((r) => r.rows[0] || null);
 }
 
+export async function updateTransaction(id, fields) {
+  const allowed = [
+    'transaction_type',
+    'source_type',
+    'customer_id',
+    'partner_id',
+    'expense_category_id',
+    'amount',
+    'payment_mode',
+    'transaction_date',
+    'reference_number',
+    'plot_number',
+    'paid_to',
+    'description',
+  ];
+  const sets = [];
+  const values = [];
+  let idx = 1;
+  for (const [key, value] of Object.entries(fields)) {
+    if (!allowed.includes(key)) continue;
+    sets.push(`${key} = $${idx}`);
+    values.push(value ?? null);
+    idx += 1;
+  }
+  if (sets.length === 0) return null;
+  values.push(id);
+  const { rows } = await query(
+    `UPDATE transactions SET ${sets.join(', ')} WHERE id = $${idx} RETURNING id, public_id`,
+    values,
+  );
+  if (!rows[0]) return null;
+  return findTransactionById(rows[0].id);
+}
+
 export async function reverseTransaction(id, { userId, reason, client = null }) {
   const db = client ?? pool;
   await db.query('BEGIN');
@@ -257,6 +292,18 @@ export async function reverseTransaction(id, { userId, reason, client = null }) 
 
 const ACTIVE_FLOW_WHERE = `
   deleted_at IS NULL AND reversed_at IS NULL AND is_reversal = false`;
+
+export function partnerInflowTotals(partnerId) {
+  return query(
+    `SELECT
+       COALESCE(SUM(amount) FILTER (WHERE source_type = 'partner_capital'), 0)::numeric(14,2) AS capital_contributions,
+       COALESCE(SUM(amount) FILTER (WHERE source_type = 'partner_loan'), 0)::numeric(14,2) AS loan_receipts,
+       COALESCE(SUM(amount), 0)::numeric(14,2) AS total_inflow
+     FROM transactions
+     WHERE partner_id = $1 AND ${ACTIVE_FLOW_WHERE}`,
+    [partnerId],
+  ).then((r) => r.rows[0]);
+}
 
 export function balanceBreakdown() {
   return query(

@@ -40,6 +40,7 @@ export const transactionApi = {
   list: (params) => get('/transactions', params),
   get: (publicId) => get(`/transactions/${publicId}`),
   create: (body) => post('/transactions', body),
+  update: (publicId, body) => api.patch(`/transactions/${publicId}`, body).then((r) => r.data.data),
   remove: (publicId, body) => del(`/transactions/${publicId}`, body),
   reverse: (publicId, body) => post(`/transactions/${publicId}/reverse`, body),
 };

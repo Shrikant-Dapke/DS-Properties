@@ -2,6 +2,7 @@ import {
   addTransaction,
   getAllTransactions,
   getTransaction,
+  updateExistingTransaction,
   removeTransaction,
   reverseExistingTransaction,
 } from '../services/transactionService.js';
@@ -38,6 +39,13 @@ export async function listTransactions(req, res) {
 export async function getTransactionById(req, res) {
   const tx = await getTransaction(req.params.id);
   res.json({ success: true, data: tx });
+}
+
+export async function updateTransaction(req, res) {
+  const ctx = buildContext(req);
+  const result = await updateExistingTransaction(req.params.id, req.body, ctx);
+  invalidateFinancialCachePublic();
+  res.json({ success: true, data: result });
 }
 
 export async function deleteTransaction(req, res) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { transactionApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -26,6 +27,7 @@ const filtersInitial = {
 export default function Transactions() {
   const toast = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [filters, setFilters] = useState(filtersInitial);
   const [page, setPage] = useState(1);
@@ -141,7 +143,7 @@ export default function Transactions() {
       <PageHeader
         title="Transactions"
         subtitle="All intakes and outtakes"
-        actions={canWrite(user) && <Button onClick={() => (window.location.href = '/entries/new')}>+ Add Entry</Button>}
+        actions={canWrite(user) && <Button onClick={() => navigate('/entries/new')}>+ Add Entry</Button>}
       />
 
       <Card className="mb-4" pad={false}>
@@ -194,6 +196,11 @@ export default function Transactions() {
               <Button variant="secondary" onClick={() => setSelected(null)}>
                 Close
               </Button>
+              {canWrite(user) && !selected.isReversal && !selected.reversedAt && (
+                <Button variant="secondary" onClick={() => navigate(`/entries/new?edit=${selected.publicId}`)}>
+                  Edit
+                </Button>
+              )}
               {isAdmin(user) && !selected.isReversal && !selected.reversedAt && (
                 <>
                   <Button variant="secondary" onClick={() => setAction('reverse')}>

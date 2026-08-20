@@ -5,8 +5,8 @@ _Updated: 20 Aug 2026_
 ## Summary
 
 DS Properties V4 is **feature-complete** for the scope defined in the master onboarding
-spec. Backend, frontend, docs, and automated tests are all in place. The final commit is
-pending only a clean-DB reset so the system ships with pristine seed data.
+spec, and has passed an audit + corrective pass: confirmed findings were fixed with
+regression coverage, and the full suite is green.
 
 ## Completed
 
@@ -17,32 +17,33 @@ pending only a clean-DB reset so the system ships with pristine seed data.
 | Backend API (auth, customers, partners, categories, transactions, dashboard, reports, settings, users, audit) | ✅ |
 | Auth security (bcrypt, JWT 15 min, rotating refresh tokens, lockout, rate limits) | ✅ |
 | Financial integrity (reversals, soft deletes, duplicate warnings, exact numeric(14,2)) | ✅ |
+| Transaction editing (`PATCH /transactions/:id`, admin + operator, audit-logged) | ✅ |
 | Audit trail on all meaningful actions | ✅ |
-| Automated tests (43 integration tests, all passing) | ✅ |
-| Frontend (login, dashboard w/ charts, add entry, transactions, customers, partners, categories, reports, settings, users, audit, change password) | ✅ |
-| PDF + Excel export utilities | ✅ |
+| Automated tests (51 backend integration tests, 2 frontend component tests, all passing) | ✅ |
+| Frontend (login, dashboard w/ charts, add/edit entry, transactions, customers, partners, categories, reports, settings, users, audit, change password) | ✅ |
+| Report exports (PDF + Excel buttons on every report tab) | ✅ |
 | Responsive layout (desktop sidebar + mobile bottom nav) | ✅ |
 | End-to-end verification (live API + Vite proxy) | ✅ |
 
 ## Verified (this session)
 
-- `backend`: 43/43 Jest tests pass; ESLint clean.
-- `frontend`: `vite build` succeeds; ESLint clean.
+- `backend`: 51/51 Jest tests pass (includes 8 new regression tests for the audit
+  findings); ESLint clean.
+- `frontend`: `vite build` succeeds; ESLint clean; 2/2 Vitest component tests pass
+  (AddEntry type-switch payload hygiene, duplicate-warning dialog flow).
 - Live end-to-end: login → create customer/partner/category → create intake, partner
-  capital, outtake → list/filter transactions → dashboard balance correct → reversal
-  updates balance → monthly report → category report → customer ledger → users list →
-  audit log. Vite dev server proxies `/api` to the backend correctly.
+  capital, outtake → list/filter transactions → edit an entry → dashboard balance
+  correct → reversal updates balance → monthly report → category report → customer
+  ledger → users list → audit log. Vite dev server proxies `/api` to the backend
+  correctly.
 
-## Not started / known gaps
+## Known gaps
 
-- **DB reset before final commit** — dev DB currently holds manual smoke/E2E records;
-  reset to clean seed state during final verification.
 - **Production deploy** — no Docker image / CI / hosting config yet (Docker is not
   installed on this machine; `docker-compose.yml` is provided for portability).
-- **Frontend unit/E2E tests** — backend has the test suite; frontend is verified via
-  build + live smoke only.
-- **File export of all reports** — PDF/Excel utilities exist; the Reports page currently
-  exposes the data views. Export buttons were deferred to a follow-up (see NEXT_TASK).
+- **Backup strategy** — documented procedure only; no scheduled backup script.
+- **Frontend coverage** — Vitest suite is small (2 tests, AddEntry focus); the backend
+  suite carries the functional contract.
 
 ## Running it
 

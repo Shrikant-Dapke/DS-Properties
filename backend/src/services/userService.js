@@ -33,8 +33,6 @@ export async function listAllUsers({ search, role, page, limit, offset }) {
 }
 
 export async function createNewUser(data, ctx) {
-  const existing = await findUserByPublicId(data.publicId);
-  void existing;
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
   const user = await createUser({
     username: data.username,

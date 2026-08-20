@@ -23,6 +23,15 @@ describe('Auth', () => {
       expect(res.body.error.code).toBe('UNAUTHORIZED');
     });
 
+    it('issues access tokens that expire after 15 minutes', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ username: 'admin', password: 'Admin@123' });
+      const payload = JSON.parse(Buffer.from(res.body.data.accessToken.split('.')[1], 'base64url').toString());
+      const ttlSeconds = payload.exp - payload.iat;
+      expect(ttlSeconds).toBe(900);
+    });
+
     it('rejects short password at validation layer', async () => {
       const res = await request(app)
         .post('/api/v1/auth/login')

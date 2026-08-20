@@ -223,6 +223,146 @@ describe('Transactions', () => {
     expect(second.status).toBe(409);
   });
 
+  it('rejects an outtake carrying intake source state', async () => {
+    const customerId = await createCustomer('Outtake Source Leak');
+    const categoryId = await firstCategoryId();
+    const res = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({
+        transactionType: 'outtake',
+        sourceType: 'customer',
+        customerPublicId: customerId,
+        amount: 1000,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-11',
+        categoryPublicId: categoryId,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('updates an intake transaction (description and amount)', async () => {
+    const customerId = await createCustomer('Update Customer');
+    const created = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({
+        transactionType: 'intake',
+        sourceType: 'customer',
+        customerPublicId: customerId,
+        amount: 5000,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-12',
+        description: 'before',
+      });
+    const publicId = created.body.data.transaction.publicId;
+
+    const res = await request(app)
+      .patch(`/api/v1/transactions/${publicId}`)
+      .set(authHeader(adminToken))
+      .send({ amount: 6000, description: 'after', paymentMode: 'upi' });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.data.amount)).toBe(6000);
+    expect(res.body.data.description).toBe('after');
+    expect(res.body.data.paymentMode).toBe('upi');
+    expect(res.body.data.customer.publicId).toBe(customerId);
+  });
+
+  it('operator can update a transaction', async () => {
+    const opToken = (await login(operator.username, operator.password)).accessToken;
+    const categoryId = await firstCategoryId();
+    const created = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(opToken))
+      .send({
+        transactionType: 'outtake',
+        amount: 4000,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-13',
+        categoryPublicId: categoryId,
+      });
+    const publicId = created.body.data.transaction.publicId;
+
+    const res = await request(app)
+      .patch(`/api/v1/transactions/${publicId}`)
+      .set(authHeader(opToken))
+      .send({ amount: 4500 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.data.amount)).toBe(4500);
+  });
+
+  it('forbids viewer from updating a transaction', async () => {
+    const vToken = (await login(viewer.username, viewer.password)).accessToken;
+    const categoryId = await firstCategoryId();
+    const created = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({
+        transactionType: 'outtake',
+        amount: 3000,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-14',
+        categoryPublicId: categoryId,
+      });
+    const res = await request(app)
+      .patch(`/api/v1/transactions/${created.body.data.transaction.publicId}`)
+      .set(authHeader(vToken))
+      .send({ amount: 3100 });
+    expect(res.status).toBe(403);
+  });
+
+  it('updating an outtake preserves its category when not resent', async () => {
+    const categoryId = await firstCategoryId();
+    const created = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({
+        transactionType: 'outtake',
+        amount: 2000,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-15',
+        categoryPublicId: categoryId,
+      });
+    const publicId = created.body.data.transaction.publicId;
+
+    const res = await request(app)
+      .patch(`/api/v1/transactions/${publicId}`)
+      .set(authHeader(adminToken))
+      .send({ amount: 2500 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.data.amount)).toBe(2500);
+    expect(res.body.data.category.publicId).toBe(categoryId);
+  });
+
+  it('rejects updating an already-reversed transaction', async () => {
+    const customerId = await createCustomer('Reversed Update');
+    const created = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({
+        transactionType: 'intake',
+        sourceType: 'customer',
+        customerPublicId: customerId,
+        amount: 1111,
+        paymentMode: 'cash',
+        transactionDate: '2026-07-16',
+      });
+    const publicId = created.body.data.transaction.publicId;
+
+    const reversed = await request(app)
+      .post(`/api/v1/transactions/${publicId}/reverse`)
+      .set(authHeader(adminToken))
+      .send({ adminPassword: 'Admin@123', reason: 'then edit' });
+    expect(reversed.status).toBe(200);
+
+    const res = await request(app)
+      .patch(`/api/v1/transactions/${publicId}`)
+      .set(authHeader(adminToken))
+      .send({ amount: 2222 });
+    expect(res.status).toBe(409);
+  });
+
   it('returns the monthly report with net movement', async () => {
     const res = await request(app)
       .get('/api/v1/reports/monthly')

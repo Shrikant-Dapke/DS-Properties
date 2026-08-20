@@ -2,6 +2,51 @@
 
 All notable changes to DS Properties V4.
 
+## [0.1.1] — 2026-08-20
+
+Audit + corrective pass — confirmed findings fixed with regression coverage.
+
+### Added
+
+**Backend**
+- `PATCH /transactions/:id` — edit an existing entry (admin + operator). Partial updates,
+  classification preserved when not resent, rejects reversed/reversal records, writes an
+  audit log, invalidates dashboard cache. Schema: `updateTransactionSchema`; model:
+  `updateTransaction`.
+- `partnerInflowTotals(partnerId)` SQL aggregate — partner financial report totals now
+  span the full ledger, not just the current page.
+
+**Frontend**
+- Edit Entry mode (`/entries/new?edit=<publicId>`) with prefilled form and "Update entry"
+  submit; Edit button on transaction rows for admin/operator (hidden for reversed/
+  reversal rows).
+- Export buttons (PDF + Excel) wired into every report tab (monthly, daily, category
+  range, partner financial).
+- Vitest + React Testing Library setup and AddEntry regression tests (2 tests).
+
+### Fixed
+
+**Backend**
+- JWT access expiry now 15 minutes everywhere (`environment.js` default, `.env.example`,
+  `.env`); previously config defaulted to 30m while docs claimed 15m.
+- Global XSS sanitizer no longer trims/escapes password fields — credentials with leading
+  or trailing spaces are no longer silently corrupted.
+- Dead code removed in `userService.createNewUser` (unused lookup).
+
+**Frontend**
+- Outtake form no longer retains intake source state: switching to outtake clears
+  source/customer/partner and the payload omits them entirely.
+- Duplicate warning no longer navigates immediately — a dialog asks the user to confirm
+  ("Stay here" / "Continue to transactions"); the entry is saved either way.
+
+### Tests
+
+- Backend suite: 43 → 51 tests (outtake source-state rejection, PATCH update lifecycle
+  incl. roles and reversed-record refusal, partner report totals across pages, 15-minute
+  JWT expiry assertion).
+- Frontend suite: new Vitest component tests for AddEntry type-switch payload hygiene and
+  duplicate-dialog behavior.
+
 ## [0.1.0] — 2026-08-20
 
 Initial release — first complete implementation of the master spec.
@@ -48,4 +93,4 @@ Initial release — first complete implementation of the master spec.
 - (First release — no fixes yet.)
 
 ### Known limitations
-- See `NEXT_TASK.md` (report export buttons, frontend tests, deployment).
+- See `NEXT_TASK.md` (frontend test coverage, deployment).

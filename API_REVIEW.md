@@ -1,7 +1,7 @@
 # API_REVIEW
 
 Post-implementation self-review of the HTTP API against the master spec. Verified by the
-integration suite (43 tests) and a live end-to-end smoke run.
+integration suite (51 tests) and a live end-to-end smoke run.
 
 ## Coverage vs. spec
 
@@ -21,7 +21,7 @@ integration suite (43 tests) and a live end-to-end smoke run.
 | Partner financial report (capital, loans, transfers, net) | ✅ | `/reports/partners/:publicId?from&to` |
 | Recent entries on dashboard | ✅ | `recentTransactions` in summary |
 | Customer / partner ledger | ✅ | `/customers/:id/ledger`, `/partners/:id/ledger` |
-| Export data (PDF/Excel) | ⚠️ | utilities ship; buttons deferred (NEXT_TASK) |
+| Export data (PDF/Excel) | ✅ | frontend buttons per report tab; backend data via report endpoints |
 | Audit log with actor/IP/UA/before/after | ✅ | `/audit` (admin) |
 | Notifications for new entries | ✅ | duplicate warning on create |
 | App settings (update) | ✅ | `/settings/:key` (admin) |
@@ -58,10 +58,16 @@ GET   /health
 
 1. **Hard delete is deliberately not exposed** for financial records; `DELETE` routes
    soft-delete and are admin+password gated.
+2. **`PATCH /transactions/:id`** accepts partial updates; classification fields follow the
+   same rules as create (an outtake being edited must not receive `sourceType`/customer/
+   partner). Updating only, say, the amount of an outtake keeps its category — send the
+   full classification only if you are changing it. Editing a reversed/reversal record
+   returns 409.
 2. **Reports are consistent with entries list**: all use the same "active, not reversed"
    aggregation, so dashboard, reports, and ledgers always agree (verified numerically).
 3. **Pagination default** `page=1&limit=20` (max 200). Ledger/dashboard fetch large sets
-   via `limit` where the UI needs full client-side work.
+   via `limit` where the UI needs full client-side work. Partner report totals are
+   computed server-side over the full ledger, independent of the page.
 4. **Audit log is append-only**; no update/delete route exists.
 5. A few spec edge behaviors were pinned down with the user during build (reversal as
    offset entry, duplicate as warning, no hard delete) — recorded in `DECISIONS.md`.

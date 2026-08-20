@@ -155,4 +155,25 @@ describe('Financial correctness', () => {
     expect(Number(d.balance)).toBe(265000);
     expect(Number(d.totals.customerIntake)).toBe(75000);
   });
+
+  it('partner report totals span all ledger pages, not just the current page', async () => {
+    const partner = await createPartner('Paged Partner');
+    const DATE = '2026-05-07';
+    const expectedCapital = [10000, 20000, 30000, 40000, 50000].reduce((a, b) => a + b, 0);
+    for (const amount of [10000, 20000, 30000, 40000, 50000]) {
+      await intake({ sourceType: 'partner_capital', partnerId: partner, amount, date: DATE });
+    }
+
+    const res = await request(app)
+      .get(`/api/v1/reports/partners/${partner}`)
+      .query({ page: 1, limit: 2 })
+      .set(authHeader(adminToken));
+    expect(res.status).toBe(200);
+
+    const d = res.body.data;
+    expect(Number(d.totals.capitalContributions)).toBe(expectedCapital);
+    expect(Number(d.totals.totalInflow)).toBe(expectedCapital);
+    expect(Number(d.totals.loanReceipts)).toBe(0);
+    expect(d.ledger.rows.length).toBe(2);
+  });
 });

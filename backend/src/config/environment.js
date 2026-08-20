@@ -14,7 +14,7 @@ const schema = Joi.object({
   PGDATABASE: Joi.string().required(),
   JWT_ACCESS_SECRET: Joi.string().min(16).required(),
   JWT_REFRESH_SECRET: Joi.string().min(16).required(),
-  JWT_ACCESS_EXPIRES: Joi.string().default('30m'),
+  JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRES: Joi.string().default('7d'),
   CORS_ORIGIN: Joi.string().default('http://localhost:5173'),
   TRUST_PROXY: Joi.boolean().default(false),
