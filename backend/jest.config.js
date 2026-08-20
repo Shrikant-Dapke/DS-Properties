@@ -17,4 +17,5 @@ export default {
   moduleFileExtensions: ['js', 'json'],
   verbose: true,
   testTimeout: 30000,
+  maxWorkers: 1,
 };

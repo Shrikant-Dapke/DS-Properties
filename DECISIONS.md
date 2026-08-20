@@ -2,7 +2,17 @@
 
 Record of notable design decisions and their rationale. Reverse-chronological.
 
-## 1. No separate partner ledger tables — discriminated single `transactions` table
+## 13. Integration tests run serially (`maxWorkers: 1`)
+
+Jest runs test files in parallel workers by default. Each file's `beforeAll` re-creates
+the shared test schema (`DROP SCHEMA public CASCADE` + migrate + seed), so parallel
+workers clobber each other — manifesting as transient `schema "public" does not exist`
+failures.
+
+**Why**: deterministic, isolated per-suite database state. The suite is small (43 tests,
+~13 s); the correctness win of an isolated schema per file outweighs wall-clock time.
+
+## 14. No separate partner ledger tables — discriminated single `transactions` table
 
 Partner capital and partner loans are rows in `transactions` with `source_type =
 'partner_capital' | 'partner_loan'` and a `partner_id` FK, instead of dedicated
