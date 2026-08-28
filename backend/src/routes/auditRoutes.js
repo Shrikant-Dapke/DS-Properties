@@ -6,7 +6,7 @@ import { listAuditLogs } from '../controllers/auditController.js';
 
 const router = Router();
 
-router.use(authenticate, authorize(ROLES.ADMIN));
+router.use(authenticate, authorize(ROLES.ADMIN, ROLES.READ_ONLY));
 router.get('/', listAuditLogs);
 
 export default router;

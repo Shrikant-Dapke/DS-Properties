@@ -78,11 +78,9 @@ export const updateTransactionSchema = Joi.object({
 }).min(1);
 
 export const destructiveTransactionSchema = Joi.object({
-  adminPassword: Joi.string().min(1).max(128).required(),
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
 });
 
 export const reverseTransactionSchema = Joi.object({
-  adminPassword: Joi.string().min(1).max(128).required(),
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
 });

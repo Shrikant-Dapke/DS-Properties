@@ -66,6 +66,7 @@ async function issueTokens(user, ctx) {
 
 function publicUser(user) {
   return {
+    id: user.id,
     publicId: user.public_id,
     username: user.username,
     fullName: user.full_name,

@@ -14,7 +14,7 @@ import { Badge } from '../components/common/Badge.jsx';
 import { formatDateTime } from '../utils/formatters.js';
 import { ROLES, ROLE_LABELS } from '../utils/constants.js';
 
-const emptyForm = { username: '', fullName: '', role: ROLES.VIEWER, password: '' };
+const emptyForm = { username: '', fullName: '', role: ROLES.READ_ONLY, password: '' };
 
 export default function Users() {
   const toast = useToast();
@@ -152,9 +152,9 @@ export default function Users() {
       key: 'role',
       label: 'Role',
       render: (r) => (
-        <Badge tone={r.role === 'admin' ? 'indigo' : r.role === 'operator' ? 'blue' : 'slate'}>
-          {ROLE_LABELS[r.role]}
-        </Badge>
+          <Badge tone={r.role === 'admin' ? 'indigo' : 'slate'}>
+            {ROLE_LABELS[r.role]}
+          </Badge>
       ),
     },
     {

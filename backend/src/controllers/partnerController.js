@@ -1,9 +1,7 @@
+import { submitChange } from '../services/governanceService.js';
 import {
   listAllPartners,
   getPartner,
-  createNewPartner,
-  updateExistingPartner,
-  deletePartner as deletePartnerService,
   getPartnerLedger,
 } from '../services/partnerService.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
@@ -29,19 +27,37 @@ export async function getPartnerById(req, res) {
 
 export async function createPartner(req, res) {
   const ctx = buildContext(req);
-  const partner = await createNewPartner(req.body, ctx);
-  res.status(201).json({ success: true, data: partner });
+  const result = await submitChange({
+    entityType: 'partner',
+    entityId: null,
+    operation: 'create',
+    proposedState: req.body,
+    ctx,
+  });
+  res.status(201).json({ success: true, data: result });
 }
 
 export async function updatePartner(req, res) {
   const ctx = buildContext(req);
-  const partner = await updateExistingPartner(req.params.id, req.body, ctx);
-  res.json({ success: true, data: partner });
+  const result = await submitChange({
+    entityType: 'partner',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
+  res.json({ success: true, data: result });
 }
 
 export async function deletePartner(req, res) {
   const ctx = buildContext(req);
-  const result = await deletePartnerService(req.params.id, ctx);
+  const result = await submitChange({
+    entityType: 'partner',
+    entityId: req.params.id,
+    operation: 'delete',
+    proposedState: {},
+    ctx,
+  });
   res.json({ success: true, data: result });
 }
 

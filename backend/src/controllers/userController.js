@@ -1,11 +1,7 @@
 import {
   listAllUsers,
-  createNewUser,
-  updateExistingUser,
-  setUserActive,
-  resetUserPassword,
-  deleteUser,
 } from '../services/userService.js';
+import { submitChange } from '../services/governanceService.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
 import { buildContext } from './context.js';
 
@@ -24,30 +20,60 @@ export async function listUsers(req, res) {
 
 export async function createUser(req, res) {
   const ctx = buildContext(req);
-  const user = await createNewUser(req.body, ctx);
-  res.status(201).json({ success: true, data: user });
+  const result = await submitChange({
+    entityType: 'user',
+    entityId: null,
+    operation: 'create',
+    proposedState: req.body,
+    ctx,
+  });
+  return res.status(201).json({ success: true, data: result });
 }
 
 export async function updateUser(req, res) {
   const ctx = buildContext(req);
-  const user = await updateExistingUser(req.params.id, req.body, ctx);
-  res.json({ success: true, data: user });
+  const result = await submitChange({
+    entityType: 'user',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
+  return res.json({ success: true, data: result });
 }
 
 export async function setActive(req, res) {
   const ctx = buildContext(req);
-  const user = await setUserActive(req.params.id, req.body.isActive, ctx);
-  res.json({ success: true, data: user });
+  const result = await submitChange({
+    entityType: 'user',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: { isActive: req.body.isActive },
+    ctx,
+  });
+  return res.json({ success: true, data: result });
 }
 
 export async function resetPassword(req, res) {
   const ctx = buildContext(req);
-  const result = await resetUserPassword(req.params.id, req.body.newPassword, ctx);
-  res.json({ success: true, data: result });
+  const result = await submitChange({
+    entityType: 'user',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: { password: req.body.newPassword },
+    ctx,
+  });
+  return res.json({ success: true, data: result });
 }
 
 export async function removeUser(req, res) {
   const ctx = buildContext(req);
-  const result = await deleteUser(req.params.id, ctx);
-  res.json({ success: true, data: result });
+  const result = await submitChange({
+    entityType: 'user',
+    entityId: req.params.id,
+    operation: 'delete',
+    proposedState: {},
+    ctx,
+  });
+  return res.json({ success: true, data: result });
 }

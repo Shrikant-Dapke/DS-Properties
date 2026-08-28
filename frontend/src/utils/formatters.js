@@ -1,3 +1,10 @@
+import i18n from '../i18n/index.js';
+
+function getLocale() {
+  const lng = (typeof window !== 'undefined' && i18n?.language) || 'en';
+  return lng === 'mr' ? 'mr-IN' : 'en-IN';
+}
+
 const inrFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
@@ -8,27 +15,36 @@ const inrFormatter = new Intl.NumberFormat('en-IN', {
 export function formatINR(value) {
   const num = Number(value ?? 0);
   if (!Number.isFinite(num)) return '₹0';
-  return inrFormatter.format(num);
+  try {
+    return new Intl.NumberFormat(getLocale(), {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+    }).format(num);
+  } catch {
+    return inrFormatter.format(num);
+  }
 }
 
 export function formatNumber(value) {
   const num = Number(value ?? 0);
   if (!Number.isFinite(num)) return '0';
-  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(num);
+  return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 2 }).format(num);
 }
 
 export function formatDate(value) {
   if (!value) return '—';
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export function formatDateTime(value) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('en-IN', {
+  return date.toLocaleString(getLocale(), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

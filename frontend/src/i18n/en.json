@@ -1,0 +1,104 @@
+{
+  "app": {
+    "name": "DS Properties",
+    "tagline": "Financial Tracking"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "mr": "मराठी"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "addEntry": "Add Entry",
+    "transactions": "Transactions",
+    "customers": "Customers",
+    "partners": "Partners",
+    "categories": "Categories",
+    "reports": "Reports",
+    "settings": "Settings",
+    "users": "Users",
+    "audit": "Audit Log",
+    "approvals": "Approvals"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "search": "Search",
+    "loading": "Loading…",
+    "confirm": "Confirm",
+    "back": "Back",
+    "actions": "Actions",
+    "status": "Status",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "all": "All",
+    "details": "Details"
+  },
+  "auth": {
+    "login": "Sign in",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign in",
+    "logout": "Log out",
+    "changePassword": "Change password",
+    "fullName": "Full name",
+    "role": "Role",
+    "loginFailed": "Invalid username or password",
+    "submit": "Submit"
+  },
+  "role": {
+    "admin": "Admin",
+    "read_only": "Read only"
+  },
+  "entity": {
+    "user": "User",
+    "transaction": "Transaction",
+    "customer": "Customer",
+    "partner": "Partner",
+    "category": "Category",
+    "app_setting": "Setting"
+  },
+  "operation": {
+    "create": "Create",
+    "update": "Update",
+    "delete": "Delete",
+    "reverse": "Reverse"
+  },
+  "status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled"
+  },
+  "approvals": {
+    "title": "Approvals",
+    "subtitle": "Multi-admin approval queue for sensitive changes",
+    "filterStatus": "Status",
+    "empty": "No change requests found.",
+    "requester": "Requested by",
+    "requiredApprovers": "Required approvers",
+    "progress": "Approvals",
+    "entityType": "Type",
+    "operation": "Operation",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "comment": "Comment",
+    "approve": "Approve",
+    "reject": "Reject",
+    "cancel": "Cancel request",
+    "rejectReason": "Reason for rejection",
+    "approveComment": "Comment (optional)",
+    "alreadyDecided": "You have already decided on this request.",
+    "waitingFor": "Waiting for more approvals",
+    "allApproved": "All required approvals received",
+    "viewDetails": "View details",
+    "decidedByYou": "Decided by you",
+    "proposedChange": "Proposed change",
+    "noPending": "No pending approvals."
+  }
+}

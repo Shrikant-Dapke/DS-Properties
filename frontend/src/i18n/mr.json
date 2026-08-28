@@ -1,0 +1,104 @@
+{
+  "app": {
+    "name": "DS प्रॉपर्टीज",
+    "tagline": "वित्तीय ट्रॅकिंग"
+  },
+  "language": {
+    "label": "भाषा",
+    "en": "English",
+    "mr": "मराठी"
+  },
+  "nav": {
+    "dashboard": "डॅशबोर्ड",
+    "addEntry": "नोंद दाखल करा",
+    "transactions": "व्यवहार",
+    "customers": "ग्राहक",
+    "partners": "भागीदार",
+    "categories": "श्रेणी",
+    "reports": "अहवाल",
+    "settings": "सेटिंग्ज",
+    "users": "वापरकर्ते",
+    "audit": "ऑडिट लॉग",
+    "approvals": "मंजुरी"
+  },
+  "common": {
+    "save": "जतन करा",
+    "cancel": "रद्द करा",
+    "delete": "हटवा",
+    "edit": "संपादन",
+    "close": "बंद करा",
+    "search": "शोधा",
+    "loading": "लोड होत आहे…",
+    "confirm": "पुष्टी करा",
+    "back": "मागे",
+    "actions": "कृती",
+    "status": "स्थिती",
+    "none": "काहीही नाही",
+    "yes": "होय",
+    "no": "नाही",
+    "all": "सर्व",
+    "details": "तपशील"
+  },
+  "auth": {
+    "login": "साइन इन",
+    "username": "वापरकर्तानाव",
+    "password": "पासवर्ड",
+    "loginButton": "साइन इन",
+    "logout": "लॉग आउट",
+    "changePassword": "पासवर्ड बदला",
+    "fullName": "पूर्ण नाव",
+    "role": "भूमिका",
+    "loginFailed": "अवैध वापरकर्तानाव किंवा पासवर्ड",
+    "submit": "सबमिट करा"
+  },
+  "role": {
+    "admin": "अॅडमिन",
+    "read_only": "फक्त वाचन"
+  },
+  "entity": {
+    "user": "वापरकर्ता",
+    "transaction": "व्यवहार",
+    "customer": "ग्राहक",
+    "partner": "भागीदार",
+    "category": "श्रेणी",
+    "app_setting": "सेटिंग"
+  },
+  "operation": {
+    "create": "तयार करा",
+    "update": "अद्यतनित करा",
+    "delete": "हटवा",
+    "reverse": "रद्द करा"
+  },
+  "status": {
+    "pending": "प्रलंबित",
+    "approved": "मंजूर",
+    "rejected": "नाकारले",
+    "cancelled": "रद्द"
+  },
+  "approvals": {
+    "title": "मंजुरी",
+    "subtitle": "संवेदनशील बदलांसाठी मल्टी-अॅडमिन मंजुरी प्रलंबित यादी",
+    "filterStatus": "स्थिती",
+    "empty": "कोणतीही बदल विनंती सापडली नाही.",
+    "requester": "विनंतीकर्ता",
+    "requiredApprovers": "आवश्यक मंजूरकर्ते",
+    "progress": "मंजुरी",
+    "entityType": "प्रकार",
+    "operation": "क्रिया",
+    "createdAt": "तयार केले",
+    "updatedAt": "अद्यतनित",
+    "comment": "टिप्पणी",
+    "approve": "मंजूर करा",
+    "reject": "नाकारा",
+    "cancel": "विनंती रद्द करा",
+    "rejectReason": "नाकारण्याचे कारण",
+    "approveComment": "टिप्पणी (पर्यायी)",
+    "alreadyDecided": "आपण या विनंतीवर आधीच निर्णय घेतला आहे.",
+    "waitingFor": "अधिक मंजुरींची प्रतीक्षा",
+    "allApproved": "आवश्यक सर्व मंजुरी मिळाल्या",
+    "viewDetails": "तपशील पहा",
+    "decidedByYou": "आपल्याकडून निर्णय घेतला",
+    "proposedChange": "प्रस्तावित बदल",
+    "noPending": "कोणतीही प्रलंबित मंजुरी नाही."
+  }
+}

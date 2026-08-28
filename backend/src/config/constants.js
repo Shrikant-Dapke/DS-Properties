@@ -1,10 +1,41 @@
 export const ROLES = Object.freeze({
   ADMIN: 'admin',
-  OPERATOR: 'operator',
-  VIEWER: 'viewer',
+  READ_ONLY: 'read_only',
 });
 
 export const ROLE_LIST = Object.values(ROLES);
+
+// Entity types that may be governed by a change request. This is an explicit
+// allow-list — arbitrary table/entity names from user input are rejected.
+export const GOVERNANCE_ENTITY_TYPES = Object.freeze([
+  'transaction',
+  'customer',
+  'partner',
+  'category',
+  'user',
+  'app_setting',
+]);
+
+// Operations that a change request may represent.
+export const GOVERNANCE_OPERATIONS = Object.freeze([
+  'create',
+  'update',
+  'delete',
+  'reverse',
+]);
+
+export const CHANGE_REQUEST_STATUSES = Object.freeze([
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'CANCELLED',
+]);
+
+export const APPROVAL_STATUSES = Object.freeze(['APPROVED', 'REJECTED']);
+
+// Users in this role are "sensitive": creating, promoting to, demoting from,
+// or deactivating an admin is a governed (multi-admin-approved) operation.
+export const SENSITIVE_ROLE = ROLES.ADMIN;
 
 export const PAYMENT_MODES = Object.freeze(['cash', 'cheque', 'upi', 'bank_transfer']);
 

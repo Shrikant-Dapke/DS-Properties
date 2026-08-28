@@ -1,19 +1,20 @@
+import { submitChange } from '../services/governanceService.js';
 import {
-  addTransaction,
-  getAllTransactions,
   getTransaction,
-  updateExistingTransaction,
-  removeTransaction,
-  reverseExistingTransaction,
+  getAllTransactions,
 } from '../services/transactionService.js';
-import { invalidateFinancialCachePublic } from '../services/dashboardService.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
 import { buildContext } from './context.js';
 
 export async function createTransaction(req, res) {
   const ctx = buildContext(req);
-  const result = await addTransaction(req.body, ctx);
-  invalidateFinancialCachePublic();
+  const result = await submitChange({
+    entityType: 'transaction',
+    entityId: null,
+    operation: 'create',
+    proposedState: req.body,
+    ctx,
+  });
   res.status(201).json({ success: true, data: result });
 }
 
@@ -43,21 +44,36 @@ export async function getTransactionById(req, res) {
 
 export async function updateTransaction(req, res) {
   const ctx = buildContext(req);
-  const result = await updateExistingTransaction(req.params.id, req.body, ctx);
-  invalidateFinancialCachePublic();
+  const result = await submitChange({
+    entityType: 'transaction',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
   res.json({ success: true, data: result });
 }
 
 export async function deleteTransaction(req, res) {
   const ctx = buildContext(req);
-  const result = await removeTransaction(req.params.id, req.body, ctx);
-  invalidateFinancialCachePublic();
+  const result = await submitChange({
+    entityType: 'transaction',
+    entityId: req.params.id,
+    operation: 'delete',
+    proposedState: req.body,
+    ctx,
+  });
   res.json({ success: true, data: result });
 }
 
 export async function reverseTransaction(req, res) {
   const ctx = buildContext(req);
-  const result = await reverseExistingTransaction(req.params.id, req.body, ctx);
-  invalidateFinancialCachePublic();
+  const result = await submitChange({
+    entityType: 'transaction',
+    entityId: req.params.id,
+    operation: 'reverse',
+    proposedState: req.body,
+    ctx,
+  });
   res.json({ success: true, data: result });
 }

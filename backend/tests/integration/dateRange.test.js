@@ -29,7 +29,7 @@ describe('Date-range filtering', () => {
       .set(authHeader(adminToken))
       .send({ name });
     expect(res.status).toBe(201);
-    return res.body.data.publicId;
+    return res.body.data.entity.publicId;
   }
 
   async function createPartner(name) {
@@ -38,7 +38,7 @@ describe('Date-range filtering', () => {
       .set(authHeader(adminToken))
       .send({ name });
     expect(res.status).toBe(201);
-    return res.body.data.publicId;
+    return res.body.data.entity.publicId;
   }
 
   async function categorySlugToId(slug) {
@@ -55,8 +55,8 @@ describe('Date-range filtering', () => {
       .set(authHeader(adminToken))
       .send(body);
     expect(res.status).toBe(201);
-    createdTransactions.push(res.body.data.transaction.publicId);
-    return res.body.data.transaction;
+    createdTransactions.push(res.body.data.entity.publicId);
+    return res.body.data.entity;
   }
 
   async function outtake({ categoryId, amount, date }) {
@@ -72,8 +72,8 @@ describe('Date-range filtering', () => {
         paidTo: 'Contractor',
       });
     expect(res.status).toBe(201);
-    createdTransactions.push(res.body.data.transaction.publicId);
-    return res.body.data.transaction;
+    createdTransactions.push(res.body.data.entity.publicId);
+    return res.body.data.entity;
   }
 
   describe('transactions list', () => {

@@ -10,7 +10,6 @@ import {
 import { findCustomerByPublicId } from '../models/customerModel.js';
 import { findPartnerByPublicId } from '../models/partnerModel.js';
 import { findCategoryByPublicId } from '../models/categoryModel.js';
-import { verifyAdminPassword } from './authService.js';
 import { logAudit } from './auditService.js';
 import { NotFoundError, ValidationError, ConflictError } from '../utils/errors.js';
 import { AUDIT_ACTIONS, SOURCE_TYPES, TRANSACTION_TYPES } from '../config/constants.js';
@@ -209,7 +208,7 @@ export async function getTransaction(publicId) {
   return serialize(tx);
 }
 
-export async function removeTransaction(publicId, { adminPassword, reason }, ctx) {
+export async function removeTransaction(publicId, { reason }, ctx) {
   const tx = await findTransactionByPublicId(publicId);
   if (!tx) throw new NotFoundError('Transaction not found');
 
@@ -220,7 +219,6 @@ export async function removeTransaction(publicId, { adminPassword, reason }, ctx
     throw new ConflictError('Reversal records cannot be deleted', 'IS_REVERSAL');
   }
 
-  await verifyAdminPassword(ctx.userId, adminPassword);
   await softDeleteTransaction(tx.id);
 
   await logAudit({
@@ -236,14 +234,12 @@ export async function removeTransaction(publicId, { adminPassword, reason }, ctx
   return { success: true };
 }
 
-export async function reverseExistingTransaction(publicId, { reason, adminPassword }, ctx) {
+export async function reverseExistingTransaction(publicId, { reason }, ctx) {
   const tx = await findTransactionByPublicId(publicId);
   if (!tx) throw new NotFoundError('Transaction not found');
   if (tx.reversed_at) throw new ConflictError('Transaction is already reversed', 'ALREADY_REVERSED');
   if (tx.is_reversal) throw new ConflictError('Reversal records cannot be reversed', 'IS_REVERSAL');
   if (tx.deleted_at) throw new NotFoundError('Transaction not found');
-
-  await verifyAdminPassword(ctx.userId, adminPassword);
 
   const result = await modelReverseTransaction(tx.id, {
     userId: ctx.userId,

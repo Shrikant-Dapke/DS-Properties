@@ -71,6 +71,20 @@ export async function updateExistingUser(publicId, data, ctx) {
   if (data.phone !== undefined) fields.phone = data.phone ?? null;
   if (data.role !== undefined) fields.role = data.role;
 
+  if (Object.keys(fields).length === 0) {
+    await logAudit({
+      userId: ctx.userId,
+      action: AUDIT_ACTIONS.USER_UPDATE,
+      domain: 'users',
+      recordId: existing.public_id,
+      oldValues: { role: existing.role, fullName: existing.full_name },
+      newValues: {},
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    return serialize(existing);
+  }
+
   const user = await updateUser(existing.id, fields).catch((err) => {
     if (err.code === '23505') throw new ConflictError('Username is already taken', 'USERNAME_TAKEN');
     throw err;
@@ -90,10 +104,10 @@ export async function updateExistingUser(publicId, data, ctx) {
   return serialize(user);
 }
 
-export async function setUserActive(publicId, isActive, ctx) {
+export async function setUserActive(publicId, isActive, ctx, allowSelf = false) {
   const existing = await findUserByPublicId(publicId);
   if (!existing) throw new NotFoundError('User not found');
-  if (existing.id === ctx.userId && !isActive) {
+  if (!allowSelf && existing.id === ctx.userId && !isActive) {
     throw new ValidationError('You cannot deactivate your own account');
   }
 

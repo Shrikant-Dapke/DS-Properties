@@ -1,8 +1,16 @@
 import pg from 'pg';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { config } from './environment.js';
 import { logger } from '../utils/logger.js';
 
 const { Pool } = pg;
+
+// Active-transaction store. When a `withTransaction` block runs, every call to
+// `query` (including those made deep inside models/services) participates in the
+// same PostgreSQL transaction by using the stored client. This lets the approval
+// applier run entity writes + audit inserts atomically without threading a
+// `client` argument through every function signature.
+const txStore = new AsyncLocalStorage();
 
 export const pool = new Pool({
   host: config.db.host,
@@ -25,5 +33,27 @@ export async function checkDatabase() {
 }
 
 export function query(text, params) {
-  return pool.query(text, params);
+  const client = txStore.getStore();
+  return (client || pool).query(text, params);
+}
+
+/**
+ * Run `callback` inside a PostgreSQL transaction. The client is made available
+ * to every `query()` call within the async context, so nested model/service
+ * writes are committed or rolled back together. If `callback` throws, the
+ * transaction is rolled back and the error rethrown.
+ */
+export async function withTransaction(callback) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await txStore.run(client, callback);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

@@ -8,9 +8,9 @@ import { getSettings, updateSettings } from '../controllers/settingsController.j
 
 const router = Router();
 
-router.use(authenticate, authorize(ROLES.ADMIN));
+router.use(authenticate);
 
-router.get('/', getSettings);
-router.put('/:key', validate(updateSettingSchema), updateSettings);
+router.get('/', authorize(ROLES.ADMIN, ROLES.READ_ONLY), getSettings);
+router.put('/:key', authorize(ROLES.ADMIN), validate(updateSettingSchema), updateSettings);
 
 export default router;

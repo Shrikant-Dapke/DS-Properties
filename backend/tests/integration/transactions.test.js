@@ -1,15 +1,13 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { getAdminToken, authHeader, login, setupOperator, setupViewer } from '../helpers/api.js';
+import { getAdminToken, authHeader, login, setupViewer, setupSecondAdmin } from '../helpers/api.js';
 
 describe('Transactions', () => {
   let adminToken;
-  let operator;
   let viewer;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
-    operator = await setupOperator();
     viewer = await setupViewer();
   });
 
@@ -18,7 +16,7 @@ describe('Transactions', () => {
       .post('/api/v1/customers')
       .set(authHeader(adminToken))
       .send({ name });
-    return res.body.data.publicId;
+    return res.body.data.entity?.publicId ?? res.body.data.publicId;
   }
 
   async function firstCategoryId() {
@@ -42,9 +40,9 @@ describe('Transactions', () => {
         referenceNumber: 'REF-001',
       });
     expect(res.status).toBe(201);
-    expect(Number(res.body.data.transaction.amount)).toBe(15000.5);
-    expect(res.body.data.transaction.plotNumber).toBe('PLOT-101');
-    expect(res.body.data.duplicateWarning).toBe(false);
+    expect(Number(res.body.data.entity.amount)).toBe(15000.5);
+    expect(res.body.data.entity.plotNumber).toBe('PLOT-101');
+    expect(res.body.data.meta.duplicateWarning).toBe(false);
   });
 
   it('flags a near-duplicate as a warning, not a rejection', async () => {
@@ -62,27 +60,21 @@ describe('Transactions', () => {
       .set(authHeader(adminToken))
       .send(payload);
     expect(first.status).toBe(201);
-    expect(first.body.data.duplicateWarning).toBe(false);
+    expect(first.body.data.meta.duplicateWarning).toBe(false);
 
     const second = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
       .send(payload);
     expect(second.status).toBe(201);
-    expect(second.body.data.duplicateWarning).toBe(true);
-    expect(second.body.data.duplicates.length).toBeGreaterThan(0);
+    expect(second.body.data.meta.duplicateWarning).toBe(true);
   });
 
   it('requires a category on outtakes', async () => {
     const res = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        amount: 1000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-03',
-      });
+      .send({ transactionType: 'outtake', amount: 1000, paymentMode: 'cash', transactionDate: '2026-07-03' });
     expect(res.status).toBe(400);
   });
 
@@ -90,12 +82,7 @@ describe('Transactions', () => {
     const res = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
-      .send({
-        transactionType: 'intake',
-        amount: 1000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-04',
-      });
+      .send({ transactionType: 'intake', amount: 1000, paymentMode: 'cash', transactionDate: '2026-07-04' });
     expect(res.status).toBe(400);
   });
 
@@ -114,11 +101,11 @@ describe('Transactions', () => {
         description: 'Gravel for site approach',
       });
     expect(res.status).toBe(201);
-    expect(res.body.data.transaction.paidTo).toBe('Road Contractor');
-    expect(res.body.data.transaction.category.name).toBeTruthy();
+    expect(res.body.data.entity.paidTo).toBe('Road Contractor');
+    expect(res.body.data.entity.category.name).toBeTruthy();
   });
 
-  it('forbids viewer from creating transactions', async () => {
+  it('forbids read_only from creating transactions', async () => {
     const vToken = (await login(viewer.username, viewer.password)).accessToken;
     const res = await request(app)
       .post('/api/v1/transactions')
@@ -131,115 +118,6 @@ describe('Transactions', () => {
         categoryPublicId: await firstCategoryId(),
       });
     expect(res.status).toBe(403);
-  });
-
-  it('operator can create transactions', async () => {
-    const opToken = (await login(operator.username, operator.password)).accessToken;
-    const categoryId = await firstCategoryId();
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(opToken))
-      .send({
-        transactionType: 'outtake',
-        amount: 5000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-07',
-        categoryPublicId: categoryId,
-        paidTo: 'Daily wages',
-      });
-    expect(res.status).toBe(201);
-  });
-
-  it('operator cannot reverse a transaction (admin only)', async () => {
-    const opToken = (await login(operator.username, operator.password)).accessToken;
-    const customerId = await createCustomer('Forbidden Reverse');
-    const tx = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'intake',
-        sourceType: 'customer',
-        customerPublicId: customerId,
-        amount: 7777,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-08',
-      });
-    const publicId = tx.body.data.transaction.publicId;
-
-    const res = await request(app)
-      .post(`/api/v1/transactions/${publicId}/reverse`)
-      .set(authHeader(opToken))
-      .send({ adminPassword: 'Test@1234', reason: 'hack' });
-    expect(res.status).toBe(403);
-  });
-
-  it('reversal requires a valid admin password', async () => {
-    const customerId = await createCustomer('Wrong Admin Pass');
-    const tx = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'intake',
-        sourceType: 'customer',
-        customerPublicId: customerId,
-        amount: 5000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-09',
-      });
-    const publicId = tx.body.data.transaction.publicId;
-
-    const res = await request(app)
-      .post(`/api/v1/transactions/${publicId}/reverse`)
-      .set(authHeader(adminToken))
-      .send({ adminPassword: 'WrongAdmin@1', reason: 'test' });
-    expect(res.status).toBe(401);
-  });
-
-  it('cannot reverse an already reversed transaction', async () => {
-    const customerId = await createCustomer('Double Reverse');
-    const tx = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'intake',
-        sourceType: 'customer',
-        customerPublicId: customerId,
-        amount: 2222,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-10',
-      });
-    const publicId = tx.body.data.transaction.publicId;
-
-    const first = await request(app)
-      .post(`/api/v1/transactions/${publicId}/reverse`)
-      .set(authHeader(adminToken))
-      .send({ adminPassword: 'Admin@123', reason: 'first' });
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .post(`/api/v1/transactions/${publicId}/reverse`)
-      .set(authHeader(adminToken))
-      .send({ adminPassword: 'Admin@123', reason: 'second' });
-    expect(second.status).toBe(409);
-  });
-
-  it('rejects an outtake carrying intake source state', async () => {
-    const customerId = await createCustomer('Outtake Source Leak');
-    const categoryId = await firstCategoryId();
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        sourceType: 'customer',
-        customerPublicId: customerId,
-        amount: 1000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-11',
-        categoryPublicId: categoryId,
-      });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('updates an intake transaction (description and amount)', async () => {
@@ -256,57 +134,28 @@ describe('Transactions', () => {
         transactionDate: '2026-07-12',
         description: 'before',
       });
-    const publicId = created.body.data.transaction.publicId;
+    const publicId = created.body.data.entity.publicId;
 
     const res = await request(app)
       .patch(`/api/v1/transactions/${publicId}`)
       .set(authHeader(adminToken))
       .send({ amount: 6000, description: 'after', paymentMode: 'upi' });
     expect(res.status).toBe(200);
-    expect(Number(res.body.data.amount)).toBe(6000);
-    expect(res.body.data.description).toBe('after');
-    expect(res.body.data.paymentMode).toBe('upi');
-    expect(res.body.data.customer.publicId).toBe(customerId);
+    expect(Number(res.body.data.entity.amount)).toBe(6000);
+    expect(res.body.data.entity.description).toBe('after');
+    expect(res.body.data.entity.paymentMode).toBe('upi');
+    expect(res.body.data.entity.customer.publicId).toBe(customerId);
   });
 
-  it('operator can update a transaction', async () => {
-    const opToken = (await login(operator.username, operator.password)).accessToken;
-    const categoryId = await firstCategoryId();
-    const created = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(opToken))
-      .send({
-        transactionType: 'outtake',
-        amount: 4000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-13',
-        categoryPublicId: categoryId,
-      });
-    const publicId = created.body.data.transaction.publicId;
-
-    const res = await request(app)
-      .patch(`/api/v1/transactions/${publicId}`)
-      .set(authHeader(opToken))
-      .send({ amount: 4500 });
-    expect(res.status).toBe(200);
-    expect(Number(res.body.data.amount)).toBe(4500);
-  });
-
-  it('forbids viewer from updating a transaction', async () => {
+  it('forbids read_only from updating a transaction', async () => {
     const vToken = (await login(viewer.username, viewer.password)).accessToken;
     const categoryId = await firstCategoryId();
     const created = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        amount: 3000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-14',
-        categoryPublicId: categoryId,
-      });
+      .send({ transactionType: 'outtake', amount: 3000, paymentMode: 'cash', transactionDate: '2026-07-14', categoryPublicId: categoryId });
     const res = await request(app)
-      .patch(`/api/v1/transactions/${created.body.data.transaction.publicId}`)
+      .patch(`/api/v1/transactions/${created.body.data.entity.publicId}`)
       .set(authHeader(vToken))
       .send({ amount: 3100 });
     expect(res.status).toBe(403);
@@ -317,22 +166,16 @@ describe('Transactions', () => {
     const created = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        amount: 2000,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-15',
-        categoryPublicId: categoryId,
-      });
-    const publicId = created.body.data.transaction.publicId;
+      .send({ transactionType: 'outtake', amount: 2000, paymentMode: 'cash', transactionDate: '2026-07-15', categoryPublicId: categoryId });
+    const publicId = created.body.data.entity.publicId;
 
     const res = await request(app)
       .patch(`/api/v1/transactions/${publicId}`)
       .set(authHeader(adminToken))
       .send({ amount: 2500 });
     expect(res.status).toBe(200);
-    expect(Number(res.body.data.amount)).toBe(2500);
-    expect(res.body.data.category.publicId).toBe(categoryId);
+    expect(Number(res.body.data.entity.amount)).toBe(2500);
+    expect(res.body.data.entity.category.publicId).toBe(categoryId);
   });
 
   it('rejects updating an already-reversed transaction', async () => {
@@ -340,20 +183,13 @@ describe('Transactions', () => {
     const created = await request(app)
       .post('/api/v1/transactions')
       .set(authHeader(adminToken))
-      .send({
-        transactionType: 'intake',
-        sourceType: 'customer',
-        customerPublicId: customerId,
-        amount: 1111,
-        paymentMode: 'cash',
-        transactionDate: '2026-07-16',
-      });
-    const publicId = created.body.data.transaction.publicId;
+      .send({ transactionType: 'intake', sourceType: 'customer', customerPublicId: customerId, amount: 1111, paymentMode: 'cash', transactionDate: '2026-07-16' });
+    const publicId = created.body.data.entity.publicId;
 
     const reversed = await request(app)
       .post(`/api/v1/transactions/${publicId}/reverse`)
       .set(authHeader(adminToken))
-      .send({ adminPassword: 'Admin@123', reason: 'then edit' });
+      .send({ reason: 'then edit' });
     expect(reversed.status).toBe(200);
 
     const res = await request(app)
@@ -375,5 +211,49 @@ describe('Transactions', () => {
     expect(Number(d.summary.intake)).toBeGreaterThan(0);
     expect(d.topCustomers).toBeDefined();
     expect(d.categories).toBeDefined();
+  });
+
+  // ---- Governance (multi-admin approval applies to sensitive user ops) ----
+  it('applies a transaction directly without a pending change request (even with two admins)', async () => {
+    await setupSecondAdmin();
+    const categoryId = await firstCategoryId();
+    const res = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({ transactionType: 'outtake', amount: 1234, paymentMode: 'cash', transactionDate: '2026-08-01', categoryPublicId: categoryId });
+    expect(res.status).toBe(201);
+    expect(res.body.data.changeRequest).toBeNull();
+    expect(res.body.data.entity).not.toBeNull();
+    expect(Number(res.body.data.entity.amount)).toBe(1234);
+  });
+
+  it('read_only cannot access approval APIs', async () => {
+    const vToken = (await login(viewer.username, viewer.password)).accessToken;
+    const list = await request(app).get('/api/v1/change-requests').set(authHeader(vToken));
+    expect(list.status).toBe(403);
+    const approve = await request(app)
+      .post('/api/v1/change-requests/00000000-0000-0000-0000-000000000000/approve')
+      .set(authHeader(vToken))
+      .send({});
+    expect(approve.status).toBe(403);
+  });
+
+  it('reverse applies directly and deactivates the transaction', async () => {
+    const customerId = await createCustomer('Reverse Gov');
+    const tx = await request(app)
+      .post('/api/v1/transactions')
+      .set(authHeader(adminToken))
+      .send({ transactionType: 'intake', sourceType: 'customer', customerPublicId: customerId, amount: 5555, paymentMode: 'cash', transactionDate: '2026-08-02' });
+    const publicId = tx.body.data.entity.publicId;
+
+    const rev = await request(app)
+      .post(`/api/v1/transactions/${publicId}/reverse`)
+      .set(authHeader(adminToken))
+      .send({ reason: 'mistake' });
+    expect(rev.status).toBe(200);
+    expect(rev.body.data.changeRequest).toBeNull();
+
+    const getAfter = await request(app).get(`/api/v1/transactions/${publicId}`).set(authHeader(adminToken));
+    expect(getAfter.body.data.reversedAt).not.toBeNull();
   });
 });

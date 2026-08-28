@@ -11,6 +11,7 @@ import dashboardRoutes from './dashboardRoutes.js';
 import reportRoutes from './reportRoutes.js';
 import settingsRoutes from './settingsRoutes.js';
 import auditRoutes from './auditRoutes.js';
+import changeRequestRoutes from './changeRequestRoutes.js';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/reports', reportRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/audit', auditRoutes);
+router.use('/change-requests', changeRequestRoutes);
 
 export default router;

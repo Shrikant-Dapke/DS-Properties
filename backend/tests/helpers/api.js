@@ -22,23 +22,34 @@ export async function createUserWithRole(token, { username, password = 'Test@123
     .set('Authorization', `Bearer ${token}`)
     .send({ username, password, fullName: `User ${role}`, role });
   if (res.status >= 400) throw new Error(`createUserWithRole failed: ${JSON.stringify(res.body)}`);
-  return { username, password, ...res.body.data };
+  // Creating an ADMIN is governed; in a single-admin org it auto-applies and the
+  // user is returned under `entity`. Other roles return the user directly.
+  const data = res.body.data.entity ?? res.body.data;
+  const loginData = await login(username, password);
+  return { username, password, accessToken: loginData.accessToken, ...data };
 }
 
-export async function setupOperator() {
-  const adminToken = await getAdminToken();
-  const user = await createUserWithRole(adminToken, {
-    username: `operator_${Date.now()}`,
-    role: ROLES.OPERATOR,
-  });
-  return user;
-}
+let viewerGlobal;
+let secondAdminGlobal;
 
 export async function setupViewer() {
-  const adminToken = await getAdminToken();
-  const user = await createUserWithRole(adminToken, {
-    username: `viewer_${Date.now()}`,
-    role: ROLES.VIEWER,
-  });
-  return user;
+  if (!viewerGlobal) {
+    const adminToken = await getAdminToken();
+    viewerGlobal = await createUserWithRole(adminToken, {
+      username: `viewer_${Date.now()}`,
+      role: ROLES.READ_ONLY,
+    });
+  }
+  return viewerGlobal;
+}
+
+export async function setupSecondAdmin() {
+  if (!secondAdminGlobal) {
+    const adminToken = await getAdminToken();
+    secondAdminGlobal = await createUserWithRole(adminToken, {
+      username: `admin2_${Date.now()}`,
+      role: ROLES.ADMIN,
+    });
+  }
+  return secondAdminGlobal;
 }

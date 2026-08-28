@@ -14,5 +14,5 @@ export function isAdmin(user) {
 }
 
 export function canWrite(user) {
-  return user?.role === 'admin' || user?.role === 'operator';
+  return user?.role === 'admin';
 }

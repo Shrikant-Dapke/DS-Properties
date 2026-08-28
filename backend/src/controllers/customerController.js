@@ -1,9 +1,7 @@
+import { submitChange } from '../services/governanceService.js';
 import {
   listAllCustomers,
   getCustomer,
-  createNewCustomer,
-  updateExistingCustomer,
-  deleteCustomer as deleteCustomerService,
   getCustomerLedger,
 } from '../services/customerService.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
@@ -28,19 +26,37 @@ export async function getCustomerById(req, res) {
 
 export async function createCustomer(req, res) {
   const ctx = buildContext(req);
-  const customer = await createNewCustomer(req.body, ctx);
-  res.status(201).json({ success: true, data: customer });
+  const result = await submitChange({
+    entityType: 'customer',
+    entityId: null,
+    operation: 'create',
+    proposedState: req.body,
+    ctx,
+  });
+  res.status(201).json({ success: true, data: result });
 }
 
 export async function updateCustomer(req, res) {
   const ctx = buildContext(req);
-  const customer = await updateExistingCustomer(req.params.id, req.body, ctx);
-  res.json({ success: true, data: customer });
+  const result = await submitChange({
+    entityType: 'customer',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
+  res.json({ success: true, data: result });
 }
 
 export async function deleteCustomer(req, res) {
   const ctx = buildContext(req);
-  const result = await deleteCustomerService(req.params.id, ctx);
+  const result = await submitChange({
+    entityType: 'customer',
+    entityId: req.params.id,
+    operation: 'delete',
+    proposedState: {},
+    ctx,
+  });
   res.json({ success: true, data: result });
 }
 

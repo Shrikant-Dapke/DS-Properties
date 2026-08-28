@@ -1,15 +1,13 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { getAdminToken, authHeader, login, setupOperator, setupViewer } from '../helpers/api.js';
+import { getAdminToken, authHeader, login, setupViewer } from '../helpers/api.js';
 
 describe('Domains: customers, partners, categories', () => {
   let adminToken;
-  let operator;
   let viewer;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
-    operator = await setupOperator();
     viewer = await setupViewer();
   });
 
@@ -22,8 +20,8 @@ describe('Domains: customers, partners, categories', () => {
         .set(authHeader(adminToken))
         .send({ name: 'Ramesh Patil', phone: '9876543210' });
       expect(res.status).toBe(201);
-      expect(res.body.data.publicId).toBeTruthy();
-      customerPublicId = res.body.data.publicId;
+      expect(res.body.data.entity.publicId).toBeTruthy();
+      customerPublicId = res.body.data.entity.publicId;
     });
 
     it('lists customers with search', async () => {
@@ -50,14 +48,14 @@ describe('Domains: customers, partners, categories', () => {
         .set(authHeader(adminToken))
         .send({ phone: '9123456789' });
       expect(res.status).toBe(200);
-      expect(res.body.data.phone).toBe('9123456789');
+      expect(res.body.data.entity.phone).toBe('9123456789');
     });
 
-    it('forbids operator from updating a customer', async () => {
-      const opToken = (await login(operator.username, operator.password)).accessToken;
+    it('forbids read_only from updating a customer', async () => {
+      const vToken = (await login(viewer.username, viewer.password)).accessToken;
       const res = await request(app)
         .put(`/api/v1/customers/${customerPublicId}`)
-        .set(authHeader(opToken))
+        .set(authHeader(vToken))
         .send({ phone: '0000000000' });
       expect(res.status).toBe(403);
     });
@@ -94,7 +92,7 @@ describe('Domains: customers, partners, categories', () => {
         .set(authHeader(adminToken))
         .send({ name: 'Suresh Partner', notes: 'Capital partner' });
       expect(res.status).toBe(201);
-      partnerPublicId = res.body.data.publicId;
+      partnerPublicId = res.body.data.entity.publicId;
     });
 
     it('lists partners with active filter', async () => {
@@ -112,7 +110,7 @@ describe('Domains: customers, partners, categories', () => {
         .set(authHeader(adminToken))
         .send({ isActive: false });
       expect(res.status).toBe(200);
-      expect(res.body.data.isActive).toBe(false);
+      expect(res.body.data.entity.isActive).toBe(false);
     });
 
     it('refuses partner inflow for an inactive partner at creation', async () => {
@@ -144,7 +142,7 @@ describe('Domains: customers, partners, categories', () => {
         .set(authHeader(adminToken))
         .send({ name: 'Survey Work', slug: 'survey-work' });
       expect(res.status).toBe(201);
-      expect(res.body.data.slug).toBe('survey-work');
+      expect(res.body.data.entity.slug).toBe('survey-work');
     });
 
     it('rejects duplicate slug', async () => {
@@ -155,11 +153,11 @@ describe('Domains: customers, partners, categories', () => {
       expect(res.status).toBe(409);
     });
 
-    it('forbids operator from creating a category', async () => {
-      const opToken = (await login(operator.username, operator.password)).accessToken;
+    it('forbids read_only from creating a category', async () => {
+      const vToken = (await login(viewer.username, viewer.password)).accessToken;
       const res = await request(app)
         .post('/api/v1/categories')
-        .set(authHeader(opToken))
+        .set(authHeader(vToken))
         .send({ name: 'Hacked', slug: 'hacked' });
       expect(res.status).toBe(403);
     });

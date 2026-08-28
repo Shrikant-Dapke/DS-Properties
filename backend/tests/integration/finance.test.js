@@ -21,7 +21,7 @@ describe('Financial correctness', () => {
       .set(authHeader(adminToken))
       .send({ name });
     expect(res.status).toBe(201);
-    return res.body.data.publicId;
+    return res.body.data.entity.publicId;
   }
 
   async function createPartner(name) {
@@ -30,7 +30,7 @@ describe('Financial correctness', () => {
       .set(authHeader(adminToken))
       .send({ name });
     expect(res.status).toBe(201);
-    return res.body.data.publicId;
+    return res.body.data.entity.publicId;
   }
 
   async function categorySlugToId(slug) {
@@ -47,7 +47,7 @@ describe('Financial correctness', () => {
       .set(authHeader(adminToken))
       .send(body);
     expect(res.status).toBe(201);
-    return res.body.data.transaction;
+    return res.body.data.entity;
   }
 
   async function outtake({ categoryId, amount, date }) {
@@ -63,7 +63,7 @@ describe('Financial correctness', () => {
         paidTo: 'Contractor',
       });
     expect(res.status).toBe(201);
-    return res.body.data.transaction;
+    return res.body.data.entity;
   }
 
   it('computes the exact expected balance from the spec scenario', async () => {

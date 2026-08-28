@@ -1,4 +1,5 @@
-import { listSettings, updateSetting } from '../services/settingsService.js';
+import { submitChange } from '../services/governanceService.js';
+import { listSettings } from '../services/settingsService.js';
 import { buildContext } from './context.js';
 
 export async function getSettings(req, res) {
@@ -9,6 +10,12 @@ export async function getSettings(req, res) {
 export async function updateSettings(req, res) {
   const ctx = buildContext(req);
   const key = req.params.key;
-  const row = await updateSetting(key, req.body.value, ctx);
-  res.json({ success: true, data: row });
+  const result = await submitChange({
+    entityType: 'app_setting',
+    entityId: key,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
+  res.json({ success: true, data: result });
 }

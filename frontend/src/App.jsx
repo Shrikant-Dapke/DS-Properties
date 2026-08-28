@@ -16,6 +16,7 @@ import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
 import Users from './pages/Users.jsx';
 import Audit from './pages/Audit.jsx';
+import Approvals from './pages/Approvals.jsx';
 import NotFound from './pages/NotFound.jsx';
 import { ROLES } from './utils/constants.js';
 
@@ -33,7 +34,14 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="entries/new" element={<AddEntry />} />
+            <Route
+              path="entries/new"
+              element={
+                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                  <AddEntry />
+                </ProtectedRoute>
+              }
+            />
             <Route path="transactions" element={<Transactions />} />
             <Route path="customers" element={<Customers />} />
             <Route path="customers/:publicId" element={<CustomerDetail />} />
@@ -62,6 +70,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={[ROLES.ADMIN]}>
                   <Audit />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="approvals"
+              element={
+                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                  <Approvals />
                 </ProtectedRoute>
               }
             />

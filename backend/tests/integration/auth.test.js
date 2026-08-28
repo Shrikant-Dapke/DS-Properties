@@ -151,6 +151,6 @@ async function createThrowawayOperator() {
   const res = await request(app)
     .post('/api/v1/users')
     .set(authHeader(adminToken))
-    .send({ username, password: 'Test@1234', fullName: 'Lock Test', role: 'operator' });
+    .send({ username, password: 'Test@1234', fullName: 'Lock Test', role: 'read_only' });
   return { username, password: 'Test@1234' };
 }

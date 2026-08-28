@@ -1,10 +1,8 @@
+import { submitChange } from '../services/governanceService.js';
 import {
   listAllCategories,
   listActiveCategories as listActiveCategoriesService,
   getCategory,
-  createNewCategory,
-  updateExistingCategory,
-  deleteCategory as deleteCategoryService,
 } from '../services/categoryService.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
 import { buildContext } from './context.js';
@@ -33,18 +31,36 @@ export async function getCategoryById(req, res) {
 
 export async function createCategory(req, res) {
   const ctx = buildContext(req);
-  const category = await createNewCategory(req.body, ctx);
-  res.status(201).json({ success: true, data: category });
+  const result = await submitChange({
+    entityType: 'category',
+    entityId: null,
+    operation: 'create',
+    proposedState: req.body,
+    ctx,
+  });
+  res.status(201).json({ success: true, data: result });
 }
 
 export async function updateCategory(req, res) {
   const ctx = buildContext(req);
-  const category = await updateExistingCategory(req.params.id, req.body, ctx);
-  res.json({ success: true, data: category });
+  const result = await submitChange({
+    entityType: 'category',
+    entityId: req.params.id,
+    operation: 'update',
+    proposedState: req.body,
+    ctx,
+  });
+  res.json({ success: true, data: result });
 }
 
 export async function deleteCategory(req, res) {
   const ctx = buildContext(req);
-  const result = await deleteCategoryService(req.params.id, ctx);
+  const result = await submitChange({
+    entityType: 'category',
+    entityId: req.params.id,
+    operation: 'delete',
+    proposedState: {},
+    ctx,
+  });
   res.json({ success: true, data: result });
 }
