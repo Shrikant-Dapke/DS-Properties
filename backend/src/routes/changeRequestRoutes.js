@@ -4,7 +4,7 @@ import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { ROLES } from '../config/constants.js';
 import { publicIdParamSchema } from '../validators/common.js';
-import { decisionBodySchema } from '../validators/governanceValidators.js';
+import { decisionBodySchema, cancelBodySchema } from '../validators/governanceValidators.js';
 import {
   listChangeRequests,
   getChangeRequest,
@@ -21,6 +21,6 @@ router.get('/', listChangeRequests);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getChangeRequest);
 router.post('/:id/approve', validate(publicIdParamSchema, 'params'), validate(decisionBodySchema, 'body'), approveChangeHandler);
 router.post('/:id/reject', validate(publicIdParamSchema, 'params'), validate(decisionBodySchema, 'body'), rejectChangeHandler);
-router.post('/:id/cancel', validate(publicIdParamSchema, 'params'), cancelChangeHandler);
+router.post('/:id/cancel', validate(publicIdParamSchema, 'params'), validate(cancelBodySchema, 'body'), cancelChangeHandler);
 
 export default router;

@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import i18n, { LANGUAGE_STORAGE_KEY } from '../i18n/index.js';
-
-const LanguageContext = createContext(null);
+import { LanguageContext } from './languageContextDef.js';
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(i18n.language || 'en');
@@ -24,13 +23,4 @@ export function LanguageProvider({ children }) {
   return (
     <LanguageContext.Provider value={{ language, setLanguage }}>{children}</LanguageContext.Provider>
   );
-}
-
-export function useLanguage() {
-  const ctx = useContext(LanguageContext);
-  if (ctx) return ctx;
-  return {
-    language: i18n.language || 'en',
-    setLanguage: (lng) => i18n.changeLanguage(lng),
-  };
 }

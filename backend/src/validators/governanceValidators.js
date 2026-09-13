@@ -17,6 +17,9 @@ import { updateSettingSchema } from './reportValidators.js';
 
 const reasonSchema = Joi.object({
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+  // Destructive transaction auth: accepted here so the second-layer check
+  // does not reject it; governanceService strips it before persistence/audit.
+  adminPassword: Joi.string().min(8).max(128).optional(),
 }).unknown(true);
 
 const emptySchema = Joi.object({}).unknown(true);
@@ -88,8 +91,26 @@ const decisionSchema = Joi.object({
 
 export const decisionBodySchema = decisionSchema;
 
+const cancelBodySchemaRaw = Joi.object({
+  comment: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+  reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+});
+
+export const cancelBodySchema = cancelBodySchemaRaw;
+
 export function validateDecision(body) {
   const { value, error } = decisionSchema.validate(body, { abortEarly: false, convert: true });
+  if (error) {
+    throw new ValidationError('Validation failed', error.details.map((d) => ({
+      field: d.path.join('.'),
+      message: d.message,
+    })));
+  }
+  return value;
+}
+
+export function validateCancel(body) {
+  const { value, error } = cancelBodySchemaRaw.validate(body ?? {}, { abortEarly: false, convert: true });
   if (error) {
     throw new ValidationError('Validation failed', error.details.map((d) => ({
       field: d.path.join('.'),

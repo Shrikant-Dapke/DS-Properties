@@ -16,7 +16,9 @@ are complete with regression coverage.
 
 1. **Final verification pass** — `npm run lint` + `npm test` (backend), `npm run lint` +
    `npm test` + `npm run build` (frontend). Then commit pending changes.
-2. **Change default admin password** after first login (currently `Admin@123`).
+2. **Change default admin password** after first login (seeded via `SEED_ADMIN_PASSWORD`;
+   the local-dev default is documented in `backend/seeds/002_seed_admin_user.js` —
+   rotate it immediately, never use it in production).
 3. **Production deployment** — Dockerfile + compose profile for both services, CI, and a
    managed Postgres; secure env handling. Requires Docker or a cloud DB.
 

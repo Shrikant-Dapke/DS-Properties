@@ -21,7 +21,7 @@ import { useAuth } from '../../hooks/useAuth.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ROLE_LABELS } from '../../utils/constants.js';
 import { isAdmin } from '../../contexts/authContextDef.js';
-import { useLanguage } from '../../contexts/LanguageContext.jsx';
+import { useLanguage } from '../../hooks/useLanguage.js';
 import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
 import { ChangePasswordModal } from './ChangePasswordModal.jsx';
 

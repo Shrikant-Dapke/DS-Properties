@@ -45,10 +45,6 @@ export async function updateSetting(key, rawValue, ctx) {
 
   const row = await upsertSetting(key, value, undefined, ctx.userId);
 
-  if (key === 'opening_balance') {
-    invalidateFinancialCache();
-  }
-
   await logAudit({
     userId: ctx.userId,
     action: AUDIT_ACTIONS.SETTINGS_UPDATE,
@@ -59,6 +55,12 @@ export async function updateSetting(key, rawValue, ctx) {
     ip: ctx.ip,
     userAgent: ctx.userAgent,
   });
+
+  // Invalidate only after the write (and audit) commits so concurrent readers
+  // never rebuild financial aggregates from uncommitted state.
+  if (key === 'opening_balance') {
+    invalidateFinancialCache();
+  }
 
   return parseStored(row);
 }

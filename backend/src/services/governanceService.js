@@ -1,6 +1,6 @@
-import { withTransaction } from '../config/database.js';
+import { withTransaction, withTransactionJoinable } from '../config/database.js';
 import { SENSITIVE_ROLE } from '../config/constants.js';
-import { NotFoundError, ConflictError, AuthorizationError, AppError } from '../utils/errors.js';
+import { NotFoundError, ConflictError, AuthorizationError, AppError, ValidationError } from '../utils/errors.js';
 import { logAudit } from './auditService.js';
 import { invalidateFinancialCachePublic } from './dashboardService.js';
 
@@ -69,11 +69,15 @@ import { updateSetting } from './settingsService.js';
 // Sensitive user-operation classification (partial governance)
 // ---------------------------------------------------------------------------
 // A user mutation is governed only when it creates, promotes to, demotes from,
-// or deactivates an ADMIN. Everything else (creating/editing/deactivating a
-// READ_ONLY user, profile edits, password resets) is a direct admin action.
+// deactivates, deletes, or resets the password of an ADMIN. Everything else
+// (creating/editing/deactivating/deleting a READ_ONLY user, profile edits,
+// password resets for READ_ONLY users) is a direct admin action.
 export function isSensitiveUserOp({ targetUser, operation, payload }) {
   if (operation === 'create') {
     return payload?.role === SENSITIVE_ROLE;
+  }
+  if (operation === 'delete') {
+    return targetUser?.role === SENSITIVE_ROLE;
   }
   if (operation === 'update') {
     const newRole = payload?.role;
@@ -81,6 +85,7 @@ export function isSensitiveUserOp({ targetUser, operation, payload }) {
     if (newRole === SENSITIVE_ROLE) return true; // promote to admin
     if (oldRole === SENSITIVE_ROLE && newRole && newRole !== SENSITIVE_ROLE) return true; // demote
     if (payload?.isActive === false && oldRole === SENSITIVE_ROLE) return true; // deactivate admin
+    if (payload?.password !== undefined && oldRole === SENSITIVE_ROLE) return true; // reset admin password
   }
   return false;
 }
@@ -184,8 +189,20 @@ async function applyDispatch(request, ctx) {
         return { entity: r.transaction, meta: { duplicateWarning: r.duplicateWarning, duplicates: r.duplicates } };
       }
       if (operation === 'update') return await updateExistingTransaction(entityId, proposedState, ctx);
-      if (operation === 'delete') return await removeTransaction(entityId, { reason: proposedState.reason }, ctx);
-      if (operation === 'reverse') return await reverseExistingTransaction(entityId, { reason: proposedState.reason }, ctx);
+      if (operation === 'delete') {
+        return await removeTransaction(
+          entityId,
+          { reason: proposedState.reason, versionTag: proposedState.versionTag ?? proposedState.expectedVersion },
+          ctx,
+        );
+      }
+      if (operation === 'reverse') {
+        return await reverseExistingTransaction(
+          entityId,
+          { reason: proposedState.reason, versionTag: proposedState.versionTag ?? proposedState.expectedVersion },
+          ctx,
+        );
+      }
       break;
     case 'customer':
       if (operation === 'create') return await createNewCustomer(proposedState, ctx);
@@ -206,7 +223,11 @@ async function applyDispatch(request, ctx) {
       if (operation === 'create') return await createNewUser(proposedState, ctx);
       if (operation === 'update') {
         if (proposedState.isActive !== undefined) {
-          return await setUserActive(entityId, proposedState.isActive, ctx, true);
+          // Enforce the self-deactivation guard even on the governed apply
+          // path (allowSelf=false). Direct self-deactivation is rejected in
+          // submitChange; governed self-deactivation can only complete via
+          // multi-admin approval, never by bypass.
+          return await setUserActive(entityId, proposedState.isActive, ctx, false);
         }
         if (proposedState.password !== undefined) {
           await resetUserPassword(entityId, proposedState.password, ctx);
@@ -231,7 +252,10 @@ async function applyDispatch(request, ctx) {
 // Finalize: lock, re-verify, apply atomically
 // ---------------------------------------------------------------------------
 async function finalizeApply(request, ctx) {
-  return withTransaction(async () => {
+  // Invalidation happens after COMMIT (see below): invalidating inside the
+  // transaction could expose uncommitted state to concurrent readers on
+  // rollback, so capture the result here and invalidate only on success.
+  const applied = await withTransaction(async () => {
     const req = await getChangeRequestForUpdate(request.id);
     if (req.status !== 'PENDING') return null;
 
@@ -250,7 +274,10 @@ async function finalizeApply(request, ctx) {
     }
 
     // Optimistic concurrency: refuse to silently overwrite newer data.
-    if (req.operation === 'update' && req.versionTag) {
+    // Updates and destructive transaction ops (delete/reverse) all enforce
+    // the snapshot versionTag when present; direct paths carry no versionTag
+    // and proceed untouched.
+    if ((req.operation === 'update' || req.operation === 'delete' || req.operation === 'reverse') && req.versionTag) {
       const current = await getCurrentVersion(req.entityType, req.entityId);
       if (current !== null && current !== req.versionTag) {
         await setStatus(req.id, 'CANCELLED', 'STALE_CONFLICT');
@@ -268,7 +295,6 @@ async function finalizeApply(request, ctx) {
     }
 
     const entity = await applyDispatch(req, ctx);
-    if (req.entityType === 'transaction') invalidateFinancialCachePublic();
 
     await setStatus(req.id, 'APPROVED', null);
     await logAudit({
@@ -280,8 +306,10 @@ async function finalizeApply(request, ctx) {
       ip: ctx.ip,
       userAgent: ctx.userAgent,
     });
-    return entity;
+    return { entity, entityType: req.entityType };
   });
+  if (applied && applied.entityType === 'transaction') invalidateFinancialCachePublic();
+  return applied?.entity ?? null;
 }
 
 async function tryFinalize(request, ctx) {
@@ -298,19 +326,41 @@ async function tryFinalize(request, ctx) {
 export async function submitChange({ entityType, entityId, operation, proposedState, ctx }) {
   validateProposedState(entityType, operation, proposedState);
 
-  // Only SENSITIVE user operations (creating/promoting/demoting/deactivating an
-  // admin) go through multi-admin approval. Everything else applies immediately;
-  // we still return the unified envelope for a consistent client contract.
+  // Destructive-transaction auth secret: accepted by validation above, then
+  // stripped here so it can never reach change-request persistence, dispatch,
+  // or audit. Controllers verify it via verifyAdminPassword before calling.
+  let sanitizedState = proposedState;
+  if (sanitizedState && typeof sanitizedState === 'object' && 'adminPassword' in sanitizedState) {
+    sanitizedState = { ...sanitizedState };
+    delete sanitizedState.adminPassword;
+  }
+
+  // Only SENSITIVE user operations (creating/promoting/demoting/deactivating/
+  // deleting an admin, or resetting an admin password) go through multi-admin
+  // approval. Everything else applies immediately; we still return the unified
+  // envelope for a consistent client contract.
   let targetUser = null;
   if (entityType === 'user' && operation !== 'create') {
     const row = await findUserByPublicId(entityId);
     if (!row) throw new NotFoundError('User not found');
-    targetUser = { role: row.role, isActive: row.is_active };
+    targetUser = { id: row.id, role: row.role, isActive: row.is_active };
+    // Self-guard: an admin can never deactivate or delete their own account
+    // directly. Reject here so no dangling PENDING ticket is left; governed
+    // self-deactivation/delete can only ever complete via another admin's
+    // approval path, never by bypass.
+    if (row.id === ctx.userId) {
+      if (operation === 'delete') {
+        throw new ValidationError('You cannot delete your own account');
+      }
+      if (operation === 'update' && sanitizedState?.isActive === false) {
+        throw new ValidationError('You cannot deactivate your own account');
+      }
+    }
   }
-  const sensitive = entityType === 'user' && isSensitiveUserOp({ targetUser, operation, payload: proposedState });
+  const sensitive = entityType === 'user' && isSensitiveUserOp({ targetUser, operation, payload: sanitizedState });
 
   if (!sensitive) {
-    const applied = await applyDirect(entityType, entityId, operation, proposedState, ctx);
+    const applied = await applyDirect(entityType, entityId, operation, sanitizedState, ctx);
     return {
       changeRequest: null,
       entity: applied?.entity ?? applied ?? null,
@@ -337,7 +387,7 @@ export async function submitChange({ entityType, entityId, operation, proposedSt
     operation,
     requestedBy: ctx.userId,
     previousState,
-    proposedState,
+    proposedState: sanitizedState,
     requiredApprovers,
     versionTag,
   });
@@ -370,18 +420,46 @@ export async function submitChange({ entityType, entityId, operation, proposedSt
 }
 
 async function applyDirect(entityType, entityId, operation, proposedState, ctx) {
-  const applied = await applyDispatch({ entityType, operation, entityId, proposedState }, ctx);
-  if (entityType === 'transaction') invalidateFinancialCachePublic();
-  const resulting = applied?.entity ?? applied;
-  await logAudit({
-    userId: ctx.userId,
-    action: `${entityType}_${operation}`,
-    domain: entityType,
-    recordId: resulting?.publicId ?? entityId,
-    newValues: { operation },
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
+  // Every direct apply is atomic: entity mutation plus audit rows commit or
+  // roll back together. withTransactionJoinable joins any outer transaction
+  // when present, otherwise opens one for this dispatch. Cache invalidation
+  // runs only after the transaction commits (never inside it).
+  if (entityType === 'transaction') {
+    const applied = await withTransactionJoinable(async () => {
+      const result = await applyDispatch({ entityType, operation, entityId, proposedState }, ctx);
+      const resulting = result?.entity ?? result;
+      await logAudit({
+        userId: ctx.userId,
+        action: `${entityType}_${operation}`,
+        domain: entityType,
+        recordId: resulting?.publicId ?? entityId,
+        newValues: { operation },
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      });
+      return result;
+    });
+    invalidateFinancialCachePublic();
+    return applied;
+  }
+  const applied = await withTransactionJoinable(async () => {
+    const result = await applyDispatch({ entityType, operation, entityId, proposedState }, ctx);
+    const resulting = result?.entity ?? result;
+    await logAudit({
+      userId: ctx.userId,
+      action: `${entityType}_${operation}`,
+      domain: entityType,
+      recordId: resulting?.publicId ?? entityId,
+      newValues: { operation },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    return result;
   });
+  // Opening-balance changes affect financial aggregates; invalidate only after
+  // the transaction commits. updateSetting may already have invalidated
+  // inside the transaction — this post-commit call is the authoritative one.
+  if (entityType === 'app_setting' && entityId === 'opening_balance') invalidateFinancialCachePublic();
   return applied;
 }
 
@@ -446,18 +524,37 @@ export async function rejectChange(publicId, adminUser, comment, ctx) {
   return { changeRequest: await getChangeRequestByPublicId(publicId), entity: null };
 }
 
-export async function cancelChange(publicId, adminUser, ctx) {
+export async function cancelChange(publicId, adminUser, reasonOrCtx, ctxMaybe) {
+  // Signature is (publicId, adminUser, reason, ctx); tolerate the legacy
+  // 3-arg call (publicId, adminUser, ctx) so older callers keep working.
+  let reason = null;
+  let ctx = ctxMaybe;
+  if (ctx === undefined && reasonOrCtx && typeof reasonOrCtx === 'object'
+    && ('userId' in reasonOrCtx || 'ip' in reasonOrCtx)) {
+    ctx = reasonOrCtx;
+  } else if (reasonOrCtx !== undefined && reasonOrCtx !== null) {
+    reason = typeof reasonOrCtx === 'object'
+      ? (reasonOrCtx.reason ?? reasonOrCtx.comment ?? null)
+      : reasonOrCtx;
+  }
   const request = await getChangeRequestByPublicId(publicId);
   if (!request) throw new NotFoundError('Change request not found');
   if (request.status !== 'PENDING') {
     throw new ConflictError('Only pending change requests can be cancelled', 'ALREADY_RESOLVED');
   }
-  await setStatus(request.id, 'CANCELLED', 'CANCELLED_BY_ADMIN');
+  // Authorization mirrors the approval gate: only the requester or a member
+  // of the snapshotted requiredApprovers may cancel a pending request.
+  if (adminUser.id !== request.requestedBy && !request.requiredApprovers.includes(adminUser.id)) {
+    throw new AuthorizationError('You are not authorized to cancel this change request');
+  }
+  const trimmed = typeof reason === 'string' && reason.trim() ? reason.trim() : null;
+  await setStatus(request.id, 'CANCELLED', trimmed ?? 'CANCELLED_BY_ADMIN');
   await logAudit({
     userId: adminUser.id,
     action: 'change_request_cancel',
     domain: 'governance',
     recordId: request.publicId,
+    newValues: trimmed ? { reason: trimmed } : undefined,
     ip: ctx.ip,
     userAgent: ctx.userAgent,
   });

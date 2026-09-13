@@ -11,8 +11,21 @@ import { findCustomerByPublicId } from '../models/customerModel.js';
 import { findPartnerByPublicId } from '../models/partnerModel.js';
 import { findCategoryByPublicId } from '../models/categoryModel.js';
 import { logAudit } from './auditService.js';
+import { withTransactionJoinable } from '../config/database.js';
 import { NotFoundError, ValidationError, ConflictError } from '../utils/errors.js';
 import { AUDIT_ACTIONS, SOURCE_TYPES, TRANSACTION_TYPES } from '../config/constants.js';
+
+function versionOf(value) {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function assertFresh(tx, expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || expectedVersion === '') return;
+  if (versionOf(tx.updated_at) !== String(expectedVersion)) {
+    throw new ConflictError('Transaction changed since you loaded it', 'STALE_CONFLICT');
+  }
+}
 
 function serialize(tx) {
   return {
@@ -43,6 +56,11 @@ function serialize(tx) {
       ? { publicId: tx.created_by_public_id, username: tx.created_by_username }
       : null,
     createdAt: tx.created_at,
+    // Optimistic-concurrency source: clients read versionTag (or updatedAt)
+    // from GET and echo it back as versionTag on update/delete/reverse.
+    // Absent tags proceed untouched so existing clients keep working.
+    updatedAt: tx.updated_at,
+    versionTag: versionOf(tx.updated_at),
   };
 }
 
@@ -103,21 +121,25 @@ export async function addTransaction(data, ctx) {
     transactionDate: txData.transaction_date,
   });
 
-  const tx = await createTransaction(txData);
+  const tx = await withTransactionJoinable(async () => {
+    const created = await createTransaction(txData);
 
-  await logAudit({
-    userId: ctx.userId,
-    action: AUDIT_ACTIONS.CREATE,
-    domain: 'transactions',
-    recordId: tx.public_id,
-    newValues: {
-      type: tx.transaction_type,
-      source: tx.source_type,
-      amount: tx.amount,
-      date: tx.transaction_date,
-    },
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
+    await logAudit({
+      userId: ctx.userId,
+      action: AUDIT_ACTIONS.CREATE,
+      domain: 'transactions',
+      recordId: created.public_id,
+      newValues: {
+        type: created.transaction_type,
+        source: created.source_type,
+        amount: created.amount,
+        date: created.transaction_date,
+      },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
+    return created;
   });
 
   return {
@@ -157,6 +179,7 @@ export async function updateExistingTransaction(publicId, data, ctx) {
   if (!tx || tx.deleted_at) throw new NotFoundError('Transaction not found');
   if (tx.reversed_at) throw new ConflictError('Transaction is already reversed', 'ALREADY_REVERSED');
   if (tx.is_reversal) throw new ConflictError('Reversal records cannot be edited', 'IS_REVERSAL');
+  assertFresh(tx, data?.versionTag ?? data?.expectedVersion);
 
   const refs = await resolveReferences({
     customerPublicId: data.customerPublicId,
@@ -181,22 +204,26 @@ export async function updateExistingTransaction(publicId, data, ctx) {
 
   validateClassification(merged);
 
-  const updated = await updateTransaction(tx.id, merged);
+  const updated = await withTransactionJoinable(async () => {
+    const row = await updateTransaction(tx.id, merged);
 
-  await logAudit({
-    userId: ctx.userId,
-    action: AUDIT_ACTIONS.UPDATE,
-    domain: 'transactions',
-    recordId: tx.public_id,
-    oldValues: { type: tx.transaction_type, source: tx.source_type, amount: tx.amount, date: tx.transaction_date },
-    newValues: {
-      type: updated.transaction_type,
-      source: updated.source_type,
-      amount: updated.amount,
-      date: updated.transaction_date,
-    },
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
+    await logAudit({
+      userId: ctx.userId,
+      action: AUDIT_ACTIONS.UPDATE,
+      domain: 'transactions',
+      recordId: tx.public_id,
+      oldValues: { type: tx.transaction_type, source: tx.source_type, amount: tx.amount, date: tx.transaction_date },
+      newValues: {
+        type: row.transaction_type,
+        source: row.source_type,
+        amount: row.amount,
+        date: row.transaction_date,
+      },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
+    return row;
   });
 
   return serialize(updated);
@@ -208,7 +235,7 @@ export async function getTransaction(publicId) {
   return serialize(tx);
 }
 
-export async function removeTransaction(publicId, { reason }, ctx) {
+export async function removeTransaction(publicId, { reason, versionTag, expectedVersion }, ctx) {
   const tx = await findTransactionByPublicId(publicId);
   if (!tx) throw new NotFoundError('Transaction not found');
 
@@ -218,48 +245,64 @@ export async function removeTransaction(publicId, { reason }, ctx) {
   if (tx.is_reversal) {
     throw new ConflictError('Reversal records cannot be deleted', 'IS_REVERSAL');
   }
+  // Optimistic concurrency: callers may pass the versionTag they read;
+  // absent tags (direct path) proceed untouched.
+  assertFresh(tx, versionTag ?? expectedVersion);
 
-  await softDeleteTransaction(tx.id);
+  const previousState = serialize(tx);
 
-  await logAudit({
-    userId: ctx.userId,
-    action: AUDIT_ACTIONS.DELETE,
-    domain: 'transactions',
-    recordId: tx.public_id,
-    newValues: { amount: tx.amount, type: tx.transaction_type, reason },
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
+  await withTransactionJoinable(async () => {
+    await softDeleteTransaction(tx.id);
+
+    await logAudit({
+      userId: ctx.userId,
+      action: AUDIT_ACTIONS.DELETE,
+      domain: 'transactions',
+      recordId: tx.public_id,
+      oldValues: { amount: tx.amount, type: tx.transaction_type, source: tx.source_type, date: tx.transaction_date },
+      newValues: { amount: tx.amount, type: tx.transaction_type, reason },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
   });
 
-  return { success: true };
+  return { success: true, previousState };
 }
 
-export async function reverseExistingTransaction(publicId, { reason }, ctx) {
+export async function reverseExistingTransaction(publicId, { reason, versionTag, expectedVersion }, ctx) {
   const tx = await findTransactionByPublicId(publicId);
   if (!tx) throw new NotFoundError('Transaction not found');
   if (tx.reversed_at) throw new ConflictError('Transaction is already reversed', 'ALREADY_REVERSED');
   if (tx.is_reversal) throw new ConflictError('Reversal records cannot be reversed', 'IS_REVERSAL');
   if (tx.deleted_at) throw new NotFoundError('Transaction not found');
+  assertFresh(tx, versionTag ?? expectedVersion);
 
-  const result = await modelReverseTransaction(tx.id, {
-    userId: ctx.userId,
-    reason,
+  const previousState = serialize(tx);
+
+  const result = await withTransactionJoinable(async () => {
+    const r = await modelReverseTransaction(tx.id, {
+      userId: ctx.userId,
+      reason,
+    });
+    if (r.error) {
+      throw new ConflictError('Transaction could not be reversed', r.error);
+    }
+
+    await logAudit({
+      userId: ctx.userId,
+      action: AUDIT_ACTIONS.REVERSE,
+      domain: 'transactions',
+      recordId: tx.public_id,
+      oldValues: { amount: tx.amount, type: tx.transaction_type, source: tx.source_type, date: tx.transaction_date },
+      newValues: { amount: tx.amount, type: tx.transaction_type, reason },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
+    return r;
   });
-  if (result.error) {
-    throw new ConflictError('Transaction could not be reversed', result.error);
-  }
 
-  await logAudit({
-    userId: ctx.userId,
-    action: AUDIT_ACTIONS.REVERSE,
-    domain: 'transactions',
-    recordId: tx.public_id,
-    newValues: { amount: tx.amount, type: tx.transaction_type, reason },
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
-  });
-
-  return { success: true, reversalPublicId: result.reversalPublicId };
+  return { success: true, reversalPublicId: result.reversalPublicId, previousState };
 }
 
 export async function getInternalTransaction(publicId) {

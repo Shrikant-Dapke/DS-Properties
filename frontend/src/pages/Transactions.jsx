@@ -91,11 +91,14 @@ export default function Transactions() {
   const runAction = async () => {
     setActionLoading(true);
     try {
+      // Echo the concurrency tag so stale deletes/reverses fail with
+      // STALE_CONFLICT (409) instead of silently overwriting newer data.
+      const versionTag = selected.versionTag ?? selected.updatedAt ?? undefined;
       if (action === 'delete') {
-        await transactionApi.remove(selected.publicId, { adminPassword });
+        await transactionApi.remove(selected.publicId, { adminPassword, ...(versionTag ? { versionTag } : {}) });
         toast.success('Transaction deleted');
       } else if (action === 'reverse') {
-        await transactionApi.reverse(selected.publicId, { adminPassword, reason: 'Reversed from web UI' });
+        await transactionApi.reverse(selected.publicId, { adminPassword, reason: 'Reversed from web UI', ...(versionTag ? { versionTag } : {}) });
         toast.success('Transaction reversed');
       }
       setAction(null);

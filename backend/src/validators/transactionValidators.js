@@ -75,12 +75,24 @@ export const updateTransactionSchema = Joi.object({
   plotNumber: Joi.string().trim().max(50).allow('').allow(null).optional(),
   paidTo: Joi.string().trim().max(150).allow('').allow(null).optional(),
   description: Joi.string().trim().max(2000).allow('').allow(null).optional(),
+  // Optional optimistic-concurrency tag (read from GET versionTag/updatedAt).
+  // Absent tags proceed untouched so existing clients keep working.
+  versionTag: Joi.string().max(100).allow(null).optional(),
+  expectedVersion: Joi.string().max(100).allow(null).optional(),
 }).min(1);
 
 export const destructiveTransactionSchema = Joi.object({
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+  adminPassword: Joi.string().min(8).max(128).required(),
+  // Optional optimistic-concurrency tag (read from GET updatedAt). Absent
+  // tags proceed untouched so existing clients keep working.
+  versionTag: Joi.string().max(100).allow(null).optional(),
+  expectedVersion: Joi.string().max(100).allow(null).optional(),
 });
 
 export const reverseTransactionSchema = Joi.object({
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+  adminPassword: Joi.string().min(8).max(128).required(),
+  versionTag: Joi.string().max(100).allow(null).optional(),
+  expectedVersion: Joi.string().max(100).allow(null).optional(),
 });

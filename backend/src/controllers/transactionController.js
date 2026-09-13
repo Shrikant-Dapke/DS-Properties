@@ -1,4 +1,6 @@
 import { submitChange } from '../services/governanceService.js';
+import { verifyAdminPassword } from '../services/authService.js';
+import { ValidationError } from '../utils/errors.js';
 import {
   getTransaction,
   getAllTransactions,
@@ -56,11 +58,22 @@ export async function updateTransaction(req, res) {
 
 export async function deleteTransaction(req, res) {
   const ctx = buildContext(req);
+  const { adminPassword, reason, versionTag, expectedVersion } = req.body ?? {};
+  if (!adminPassword) {
+    throw new ValidationError('Admin password is required', [
+      { field: 'adminPassword', message: '"adminPassword" is required' },
+    ]);
+  }
+  // Canonical destructive-action auth: re-verify the authenticated admin's
+  // password directly (never via change-requests). Throws 401 when wrong.
+  await verifyAdminPassword(ctx.userId, adminPassword);
   const result = await submitChange({
     entityType: 'transaction',
     entityId: req.params.id,
     operation: 'delete',
-    proposedState: req.body,
+    // Never persist the password: only the reason (+ optional concurrency
+    // tag) flows to governance/audit.
+    proposedState: { reason, versionTag, expectedVersion },
     ctx,
   });
   res.json({ success: true, data: result });
@@ -68,11 +81,20 @@ export async function deleteTransaction(req, res) {
 
 export async function reverseTransaction(req, res) {
   const ctx = buildContext(req);
+  const { adminPassword, reason, versionTag, expectedVersion } = req.body ?? {};
+  if (!adminPassword) {
+    throw new ValidationError('Admin password is required', [
+      { field: 'adminPassword', message: '"adminPassword" is required' },
+    ]);
+  }
+  await verifyAdminPassword(ctx.userId, adminPassword);
   const result = await submitChange({
     entityType: 'transaction',
     entityId: req.params.id,
     operation: 'reverse',
-    proposedState: req.body,
+    // Never persist the password: only the reason (+ optional concurrency
+    // tag) flows to governance/audit.
+    proposedState: { reason, versionTag, expectedVersion },
     ctx,
   });
   res.json({ success: true, data: result });

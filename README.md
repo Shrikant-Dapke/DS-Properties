@@ -16,7 +16,8 @@ reports, and PDF/Excel exports.
 Prerequisites: Node 20+, PostgreSQL running locally.
 
 ```powershell
-# 1. Create the database (one time)
+# 1. Create the database (one time; local-dev default password only — use a
+#    strong unique password in production)
 psql -U postgres -h localhost -c "CREATE ROLE dsp_v4 LOGIN PASSWORD 'dsp_v4_password';"
 psql -U postgres -h localhost -c "CREATE DATABASE ds_properties_v4 OWNER dsp_v4;"
 
@@ -33,7 +34,9 @@ npm install
 npm run dev          # http://localhost:5173 (proxies /api to :3000)
 ```
 
-Default admin login: **admin / Admin@123** (change it after first login).
+Default admin login: username `admin` with the seeded password (`SEED_ADMIN_PASSWORD`;
+see `backend/seeds/002_seed_admin_user.js` for the local-dev default).
+Change it immediately after first login — never use the default in production.
 
 ## Scripts
 
@@ -66,9 +69,14 @@ Default admin login: **admin / Admin@123** (change it after first login).
   exclude deleted, reversed, and reversal rows, so balances never double-count.
 - **Duplicate detection**: entries matching an amount + party + type within 15 minutes
   are flagged with a warning, never rejected.
-- **Roles**: `admin` (everything), `operator` (create and edit entries; create customers
-  and partners), `viewer` (read-only). Editing customers/partners and destructive actions
-  (delete/reverse entries, delete records) require admin.
+- **Roles**: `admin` (full access, including user management, destructive actions,
+  settings, governance approvals, and audit) and `read_only` (can view and list,
+  cannot create, edit, delete, reverse, approve, or export-sensitive admin data).
+  Creating, promoting, demoting, deactivating, deleting, or resetting the password
+  of an `admin` requires multi-admin approval (governance); the same actions on a
+  `read_only` user apply immediately.
+- **Destructive actions**: deleting or reversing an entry requires admin role plus
+  admin-password re-entry, and is fully audited.
 - **Lockout**: 5 consecutive failed logins locks the account for ~15 minutes.
 - **Token security**: 15-minute access tokens, rotating refresh tokens (hashed at rest,
   stored with a family chain for reuse detection).
@@ -86,7 +94,7 @@ Default admin login: **admin / Admin@123** (change it after first login).
 
 ```
 backend/
-  migrations/         SQL migrations (001..009)
+  migrations/         SQL migrations (001..010, incl. roles/governance)
   seeds/              Seed scripts (categories, admin, settings)
   scripts/            migrate / seed / db-reset / smoke runners
   src/
@@ -119,9 +127,10 @@ require `Authorization: Bearer <accessToken>`.
 - `customers` — CRUD + ledger (`GET /customers/:id/ledger`)
 - `partners` — CRUD + ledger
 - `categories` — CRUD + `GET /categories/active`
-- `transactions` — CRUD + `POST /transactions/:id/reverse` (admin password required for
-  delete/reverse; `PATCH /:id` edits an entry, admin + operator; list accepts
-  optional `?from&to`)
+- `transactions` — CRUD + `POST /transactions/:id/reverse` (admin role + admin
+  password required for delete/reverse; `PATCH /:id` edits an entry, admin only;
+  update/delete/reverse accept an optional `versionTag` for optimistic concurrency —
+  a stale tag returns `409 STALE_CONFLICT`; list accepts optional `?from&to`)
 - `dashboard` — summary + category breakdown (cached; both accept `?from&to`)
 - `reports` — daily (`?from&to`), monthly (`?year&month` or `?from&to`), category range
   (`?from&to`), partner financial (`/:id?from&to`, optional range)

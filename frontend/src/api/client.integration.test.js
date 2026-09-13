@@ -11,6 +11,11 @@ import axios from 'axios';
 const BACKEND = 'http://localhost:3000';
 process.env.VITE_API_BASE = `${BACKEND}/api/v1`;
 
+// Test-only seed-admin password: override with TEST_ADMIN_PASSWORD to match a
+// custom SEED_ADMIN_PASSWORD; the fallback mirrors the seed's local-dev
+// default (see backend/seeds/002_seed_admin_user.js). Never use in production.
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'Admin@123';
+
 const localStorageStub = (() => {
   const store = new Map();
   return {
@@ -76,7 +81,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('login stores access token, refresh token and user', async () => {
-    const user = await authApi.login({ username: 'admin', password: 'Admin@123' });
+    const user = await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     expect(user.username).toBe('admin');
     expect(localStorage.getItem('dsp_access_token')).toBeTruthy();
     expect(localStorage.getItem('dsp_refresh_token')).toBeTruthy();
@@ -84,7 +89,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('expired access token is refreshed once and the original request is retried', async () => {
-    await authApi.login({ username: 'admin', password: 'Admin@123' });
+    await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     localStorage.setItem('dsp_access_token', expiredAccessToken());
     const postSpy = vi.spyOn(axios, 'post');
 
@@ -99,7 +104,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('restoreSession with a still-valid access token makes no refresh call', async () => {
-    await authApi.login({ username: 'admin', password: 'Admin@123' });
+    await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     const postSpy = vi.spyOn(axios, 'post');
 
     const user = await authApi.restoreSession();
@@ -109,7 +114,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('concurrent restoreSession calls share a single refresh (single-flight)', async () => {
-    await authApi.login({ username: 'admin', password: 'Admin@123' });
+    await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     localStorage.setItem('dsp_access_token', expiredAccessToken());
     localStorage.removeItem('dsp_user');
     const postSpy = vi.spyOn(axios, 'post');
@@ -123,7 +128,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('revoked refresh token ends the session (401 clears tokens, no redirect)', async () => {
-    await authApi.login({ username: 'admin', password: 'Admin@123' });
+    await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     localStorage.setItem('dsp_access_token', expiredAccessToken());
     localStorage.setItem('dsp_refresh_token', 'garbage-stale-token');
 
@@ -135,7 +140,7 @@ describe.skipIf(!up)('auth refresh client (live backend)', () => {
   });
 
   it('transient refresh failure (429 rate limit) keeps tokens and does not redirect', async () => {
-    await authApi.login({ username: 'admin', password: 'Admin@123' });
+    await authApi.login({ username: 'admin', password: TEST_ADMIN_PASSWORD });
     localStorage.setItem('dsp_access_token', expiredAccessToken());
     const postSpy = vi.spyOn(axios, 'post').mockRejectedValueOnce({
       response: {

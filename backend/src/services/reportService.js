@@ -89,9 +89,10 @@ export async function getMonthlyReport({ year, month, from, to }) {
     rangeTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   }
 
-  const [summary, transactions, categories, customers, openingBalance] = await Promise.all([
+  const REPORT_TX_LIMIT = 1000;
+  const [summary, txPage, categories, customers, openingBalance] = await Promise.all([
     periodSummary({ from: rangeFrom, to: rangeTo }),
-    monthlyTransactions({ from: rangeFrom, to: rangeTo, page: 1, limit: 1000, offset: 0 }),
+    monthlyTransactions({ from: rangeFrom, to: rangeTo, page: 1, limit: REPORT_TX_LIMIT, offset: 0 }),
     categoryReport({ from: rangeFrom, to: rangeTo }),
     customerReport({ from: rangeFrom, to: rangeTo }),
     getOpeningBalance(),
@@ -115,7 +116,12 @@ export async function getMonthlyReport({ year, month, from, to }) {
     openingBalance,
     categories,
     topCustomers: customers,
-    transactions: transactions.rows.map(serializeTx),
+    transactions: txPage.rows.map(serializeTx),
+    // The transaction list is capped at REPORT_TX_LIMIT rows; aggregates above
+    // always cover the full period. Consumers must check this flag before
+    // treating `transactions` as complete.
+    transactionTotal: txPage.total,
+    truncated: txPage.total > txPage.rows.length,
   };
 }
 

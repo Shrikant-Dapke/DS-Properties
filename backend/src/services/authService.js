@@ -16,11 +16,13 @@ import {
   hashToken,
   storeRefreshToken,
   findRefreshTokenByHash,
+  findRefreshTokenByHashForUpdate,
   revokeRefreshToken,
   revokeTokenFamily,
   revokeUserRefreshTokens,
   linkRefreshTokenChain,
 } from '../models/refreshTokenModel.js';
+import { withTransaction } from '../config/database.js';
 import { UnauthorizedError, AccountLockedError } from '../utils/errors.js';
 import { logAudit } from './auditService.js';
 
@@ -38,14 +40,37 @@ function generateRefreshToken() {
   return crypto.randomBytes(48).toString('base64url');
 }
 
-function parseExpiry(expiry, fallbackSeconds) {
-  if (typeof expiry === 'string' && /^\d+$/.test(expiry)) return Number(expiry);
-  const seconds = Number.parseInt(expiry, 10);
-  if (/ms$/.test(expiry)) return Number.parseInt(expiry, 10) / 1000;
-  return Number.isNaN(seconds) ? fallbackSeconds : seconds;
+export function parseExpiry(expiry, fallbackSeconds) {
+  if (expiry === undefined || expiry === null || expiry === '') return fallbackSeconds;
+  if (typeof expiry === 'number' && Number.isFinite(expiry)) return expiry;
+  const str = String(expiry).trim();
+  if (/^\d+$/.test(str)) return Number(str);
+  const match = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w)$/i.exec(str);
+  if (!match) {
+    const seconds = Number.parseInt(str, 10);
+    return Number.isNaN(seconds) ? fallbackSeconds : seconds;
+  }
+  const value = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  switch (unit) {
+    case 'ms':
+      return value / 1000;
+    case 's':
+      return value;
+    case 'm':
+      return value * 60;
+    case 'h':
+      return value * 3600;
+    case 'd':
+      return value * 86400;
+    case 'w':
+      return value * 604800;
+    default:
+      return fallbackSeconds;
+  }
 }
 
-function getRefreshTokenTtlMs() {
+export function getRefreshTokenTtlMs() {
   const seconds = parseExpiry(config.jwt.refreshExpires, 7 * 24 * 3600);
   return seconds * 1000;
 }
@@ -153,46 +178,62 @@ export async function login({ username, password }, ctx) {
 
 export async function refresh({ refreshToken }, ctx) {
   const tokenHash = hashToken(refreshToken);
-  const stored = await findRefreshTokenByHash(tokenHash);
+  // Reuse revocation must COMMIT, but withTransaction rolls back on throw.
+  // So the reuse branch revokes + commits (returns normally) and we throw
+  // outside the transaction; read-only failures throw inside (empty rollback).
+  let reuseDetected = false;
+  const result = await withTransaction(async () => {
+    // SELECT FOR UPDATE serializes concurrent refreshes of the same token:
+    // the loser blocks until the winner commits, then sees revoked_at set
+    // and falls into reuse detection (family revoked, 401).
+    const stored = await findRefreshTokenByHashForUpdate(tokenHash);
 
-  if (!stored || !stored.user_is_active) {
+    if (!stored || !stored.user_is_active) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    if (stored.revoked_at || stored.expires_at <= new Date()) {
+      // Reuse or expiry: revoke the complete family including the trigger.
+      await revokeTokenFamily(stored.family_id);
+      reuseDetected = true;
+      return null;
+    }
+
+    const user = await findUserById(stored.user_id);
+    if (!user || !user.is_active || user.deleted_at) {
+      throw new UnauthorizedError('User is not active');
+    }
+
+    // Rotate: revoke this token and issue a new one in the same family.
+    await revokeRefreshToken(stored.id);
+    const accessToken = signAccessToken(user);
+    const refreshTokenNew = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + getRefreshTokenTtlMs());
+    const created = await storeRefreshToken({
+      userId: user.id,
+      tokenHash: hashToken(refreshTokenNew),
+      expiresAt,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+      familyId: stored.family_id,
+    });
+    // Chain direction: old.replaced_by_id = new.
+    await linkRefreshTokenChain(stored.id, created.id);
+
+    await logAudit({
+      userId: user.id,
+      action: AUDIT_ACTIONS.REFRESH,
+      domain: 'auth',
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
+    return { user: publicUser(user), accessToken, refreshToken: refreshTokenNew, expiresAt };
+  });
+  if (reuseDetected) {
     throw new UnauthorizedError('Invalid refresh token');
   }
-
-  if (stored.revoked_at || stored.expires_at <= new Date()) {
-    // Token reuse or expiry: revoke the whole family to be safe.
-    await revokeTokenFamily(stored.family_id, stored.id);
-    throw new UnauthorizedError('Invalid refresh token');
-  }
-
-  const user = await findUserById(stored.user_id);
-  if (!user || !user.is_active || user.deleted_at) {
-    throw new UnauthorizedError('User is not active');
-  }
-
-  // Rotate: revoke this token and issue a new one in the same family.
-  await revokeRefreshToken(stored.id);
-  const accessToken = signAccessToken(user);
-  const refreshTokenNew = generateRefreshToken();
-  const expiresAt = new Date(Date.now() + getRefreshTokenTtlMs());
-  const created = await storeRefreshToken({
-    userId: user.id,
-    tokenHash: hashToken(refreshTokenNew),
-    expiresAt,
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
-  });
-  await linkRefreshTokenChain(created.id, stored.id);
-
-  await logAudit({
-    userId: user.id,
-    action: AUDIT_ACTIONS.REFRESH,
-    domain: 'auth',
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
-  });
-
-  return { user: publicUser(user), accessToken, refreshToken: refreshTokenNew, expiresAt };
+  return result;
 }
 
 export async function logout({ refreshToken }, ctx) {

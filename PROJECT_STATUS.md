@@ -72,4 +72,6 @@ cd backend && npm run dev       # :3000
 cd frontend && npm run dev      # :5173
 ```
 
-Login: `admin` / `Admin@123` (change after first login).
+Login: seeded `admin` user (password from `SEED_ADMIN_PASSWORD`; see
+`backend/seeds/002_seed_admin_user.js` for the local-dev default — change after
+first login, never use the default in production).

@@ -7,7 +7,7 @@ import {
 import { getChangeRequestByPublicId } from '../models/changeRequestModel.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
 import { buildContext } from './context.js';
-import { validateDecision } from '../validators/governanceValidators.js';
+import { validateDecision, validateCancel } from '../validators/governanceValidators.js';
 import { NotFoundError } from '../utils/errors.js';
 
 export async function listChangeRequests(req, res) {
@@ -46,6 +46,10 @@ export async function rejectChangeHandler(req, res) {
 
 export async function cancelChangeHandler(req, res) {
   const ctx = buildContext(req);
-  const result = await cancelChange(req.params.id, req.user, ctx);
+  const { reason, comment } = validateCancel(req.body);
+  const cancelReason = (typeof reason === 'string' && reason.trim())
+    ? reason.trim()
+    : (typeof comment === 'string' && comment.trim() ? comment.trim() : null);
+  const result = await cancelChange(req.params.id, req.user, cancelReason, ctx);
   res.json({ success: true, data: result });
 }

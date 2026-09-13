@@ -44,6 +44,7 @@ export default function AddEntry() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(Boolean(editId));
+  const [versionTag, setVersionTag] = useState(null);
   const [duplicate, setDuplicate] = useState(null);
   const [loadErrors, setLoadErrors] = useState({ customers: false, partners: false, categories: false });
   const [reloadKey, setReloadKey] = useState(0);
@@ -104,6 +105,9 @@ export default function AddEntry() {
       .get(editId)
       .then((tx) => {
         if (!active) return;
+        // Preserve the concurrency tag so the update echoes it back;
+        // the backend rejects stale tags with STALE_CONFLICT (409).
+        setVersionTag(tx.versionTag ?? tx.updatedAt ?? null);
         setForm({
           transactionType: tx.transactionType,
           sourceType: tx.sourceType || SOURCE_TYPES.CUSTOMER,
@@ -173,6 +177,8 @@ export default function AddEntry() {
     setLoading(true);
     try {
       const payload = buildPayload();
+      // Echo the concurrency tag on edit only; creates carry no version.
+      if (editId && versionTag) payload.versionTag = versionTag;
       const result = editId ? await transactionApi.update(editId, payload) : await transactionApi.create(payload);
 
       if (result?.duplicateWarning) {

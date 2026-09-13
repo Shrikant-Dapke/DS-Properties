@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { ROLES } from '../../src/config/constants.js';
+import { TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME } from './testCredentials.js';
 
 export const api = () => request(app);
 
@@ -12,7 +13,7 @@ export async function login(username, password) {
 }
 
 export async function getAdminToken() {
-  const data = await login('admin', 'Admin@123');
+  const data = await login(TEST_ADMIN_USERNAME, TEST_ADMIN_PASSWORD);
   return data.accessToken;
 }
 

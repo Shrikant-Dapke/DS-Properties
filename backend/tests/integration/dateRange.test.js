@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { getAdminToken, authHeader } from '../helpers/api.js';
+import { TEST_ADMIN_PASSWORD } from '../helpers/testCredentials.js';
 import { cacheGet } from '../../src/utils/cache.js';
 
 describe('Date-range filtering', () => {
@@ -19,7 +20,7 @@ describe('Date-range filtering', () => {
       await request(app)
         .delete(`/api/v1/transactions/${publicId}`)
         .set(authHeader(adminToken))
-        .send({ adminPassword: 'Admin@123', reason: 'dateRange test cleanup' });
+        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'dateRange test cleanup' });
     }
   });
 
@@ -337,7 +338,7 @@ describe('Date-range filtering', () => {
       await request(app)
         .post(`/api/v1/transactions/${created.publicId}/reverse`)
         .set(authHeader(adminToken))
-        .send({ adminPassword: 'Admin@123', reason: 'range test' });
+        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'range test' });
       expect(cacheGet(key)).toBeUndefined();
       const afterReverse = await request(app)
         .get('/api/v1/dashboard/summary')

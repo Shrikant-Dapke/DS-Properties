@@ -37,6 +37,21 @@ export function query(text, params) {
   return (client || pool).query(text, params);
 }
 
+export function isInTransaction() {
+  return Boolean(txStore.getStore());
+}
+
+/**
+ * Run `callback` in the current transaction when one exists, otherwise wrap
+ * it in a new `withTransaction` block. Prevents nested independent commits:
+ * inner entity writes join the outer governance/dispatch transaction so an
+ * outer ROLLBACK rolls them back together with audit rows.
+ */
+export async function withTransactionJoinable(callback) {
+  if (txStore.getStore()) return callback();
+  return withTransaction(callback);
+}
+
 /**
  * Run `callback` inside a PostgreSQL transaction. The client is made available
  * to every `query()` call within the async context, so nested model/service

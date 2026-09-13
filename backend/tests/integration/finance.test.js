@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { getAdminToken, authHeader } from '../helpers/api.js';
+import { TEST_ADMIN_PASSWORD } from '../helpers/testCredentials.js';
 
 describe('Financial correctness', () => {
   let adminToken;
@@ -124,7 +125,7 @@ describe('Financial correctness', () => {
     const reverseRes = await request(app)
       .post(`/api/v1/transactions/${tx.publicId}/reverse`)
       .set(authHeader(adminToken))
-      .send({ adminPassword: 'Admin@123', reason: 'entered by mistake' });
+      .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'entered by mistake' });
     expect(reverseRes.status).toBe(200);
 
     const res = await request(app)
@@ -144,7 +145,7 @@ describe('Financial correctness', () => {
     const delRes = await request(app)
       .delete(`/api/v1/transactions/${tx.publicId}`)
       .set(authHeader(adminToken))
-      .send({ adminPassword: 'Admin@123', reason: 'cleanup' });
+      .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'cleanup' });
     expect(delRes.status).toBe(200);
 
     const res = await request(app)

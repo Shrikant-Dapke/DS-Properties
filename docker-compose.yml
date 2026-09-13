@@ -10,6 +10,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: dsp_v4
+      # Local-dev default only — use a strong unique password in production.
       POSTGRES_PASSWORD: dsp_v4_password
       POSTGRES_DB: ds_properties_v4
     volumes:

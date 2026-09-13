@@ -1,4 +1,4 @@
-import { query, pool } from '../config/database.js';
+import { query, withTransactionJoinable, isInTransaction } from '../config/database.js';
 
 export const TRANSACTION_COLUMNS = `
   t.id, t.public_id, t.transaction_type, t.source_type,
@@ -33,29 +33,48 @@ export function findTransactionById(id) {
 }
 
 export async function createTransaction(data, client = null) {
-  const db = client ?? pool;
-  const { rows } = await db.query(
+  const params = [
+    data.transaction_type,
+    data.source_type ?? null,
+    data.customer_id ?? null,
+    data.partner_id ?? null,
+    data.expense_category_id ?? null,
+    data.amount,
+    data.payment_mode,
+    data.transaction_date,
+    data.reference_number ?? null,
+    data.plot_number ?? null,
+    data.paid_to ?? null,
+    data.description ?? null,
+    data.created_by,
+  ];
+  // ALS-aware: join the outer governance/dispatch transaction when present so
+  // an outer ROLLBACK (e.g. failed audit) rolls back the entity row. An
+  // explicit client is honored for backward compatibility.
+  if (client) {
+    const { rows } = await client.query(
+      `INSERT INTO transactions
+        (transaction_type, source_type, customer_id, partner_id, expense_category_id,
+         amount, payment_mode, transaction_date, reference_number, plot_number,
+         paid_to, description, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id, public_id`,
+      params,
+    );
+    const full = await client.query(
+      `SELECT ${TRANSACTION_COLUMNS} ${JOIN_BASE} WHERE t.id = $1`,
+      [rows[0].id],
+    );
+    return full.rows[0] || null;
+  }
+  const { rows } = await query(
     `INSERT INTO transactions
       (transaction_type, source_type, customer_id, partner_id, expense_category_id,
        amount, payment_mode, transaction_date, reference_number, plot_number,
        paid_to, description, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id, public_id`,
-    [
-      data.transaction_type,
-      data.source_type ?? null,
-      data.customer_id ?? null,
-      data.partner_id ?? null,
-      data.expense_category_id ?? null,
-      data.amount,
-      data.payment_mode,
-      data.transaction_date,
-      data.reference_number ?? null,
-      data.plot_number ?? null,
-      data.paid_to ?? null,
-      data.description ?? null,
-      data.created_by,
-    ],
+    params,
   );
   return findTransactionById(rows[0].id);
 }
@@ -120,8 +139,14 @@ export function listTransactions({
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  // Count must join customers/partners when ?search= references c.name/p.name,
+  // otherwise PostgreSQL raises "missing FROM-clause entry". Data and count
+  // share the same WHERE so totals agree with rows.
+  const countJoins = search
+    ? 'FROM transactions t LEFT JOIN customers c ON c.id = t.customer_id LEFT JOIN partners p ON p.id = t.partner_id'
+    : 'FROM transactions t';
   const countP = query(
-    `SELECT count(*)::int AS total FROM transactions t ${whereSql}`,
+    `SELECT count(*)::int AS total ${countJoins} ${whereSql}`,
     values,
   );
   const listP = query(
@@ -138,7 +163,9 @@ export function listTransactions({
 }
 
 export function listCustomerLedger(customerId, {  limit, offset }) {
-  const where = 't.customer_id = $1 AND t.deleted_at IS NULL AND t.reversed_at IS NULL';
+  // Canonical active-flow exclusion: deleted, reversed, and reversal-offset
+  // rows never appear in ledgers; count and rows share this WHERE.
+  const where = 't.customer_id = $1 AND t.deleted_at IS NULL AND t.reversed_at IS NULL AND t.is_reversal = false';
   const countP = query(
     `SELECT count(*)::int AS total FROM transactions t WHERE ${where}`,
     [customerId],
@@ -157,7 +184,7 @@ export function listCustomerLedger(customerId, {  limit, offset }) {
 }
 
 export function listPartnerLedger(partnerId, { from, to, limit, offset }) {
-  const where = ['t.partner_id = $1', 't.deleted_at IS NULL', 't.reversed_at IS NULL'];
+  const where = ['t.partner_id = $1', 't.deleted_at IS NULL', 't.reversed_at IS NULL', 't.is_reversal = false'];
   const values = [partnerId];
   let idx = 2;
   if (from) {
@@ -248,57 +275,75 @@ export async function updateTransaction(id, fields) {
   return findTransactionById(rows[0].id);
 }
 
-export async function reverseTransaction(id, { userId, reason, client = null }) {
-  const db = client ?? pool;
-  await db.query('BEGIN');
-  try {
-    const original = await db.query(
-      `SELECT * FROM transactions WHERE id = $1 AND deleted_at IS NULL AND reversed_at IS NULL AND is_reversal = false FOR UPDATE`,
-      [id],
-    ).then((r) => r.rows[0]);
+async function doReverse(id, userId, reason, exec) {
+  const original = await exec(
+    `SELECT * FROM transactions WHERE id = $1 AND deleted_at IS NULL AND reversed_at IS NULL AND is_reversal = false FOR UPDATE`,
+    [id],
+  ).then((r) => r.rows[0]);
 
-    if (!original) {
-      await db.query('ROLLBACK');
-      return { error: 'NOT_FOUND_OR_ALREADY_REVERSED' };
-    }
-
-    await db.query(
-      `UPDATE transactions SET reversed_at = now(), reversed_by = $2, reversal_reason = $3 WHERE id = $1`,
-      [id, userId, reason ?? null],
-    );
-
-    const reversal = await db.query(
-      `INSERT INTO transactions
-        (transaction_type, source_type, customer_id, partner_id, expense_category_id,
-         amount, payment_mode, transaction_date, reference_number, plot_number,
-         paid_to, description, created_by, is_reversal, reversed_from_id, reversal_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14, $15)
-       RETURNING id, public_id`,
-      [
-        original.transaction_type,
-        original.source_type,
-        original.customer_id,
-        original.partner_id,
-        original.expense_category_id,
-        original.amount,
-        original.payment_mode,
-        original.transaction_date,
-        original.reference_number,
-        original.plot_number,
-        original.paid_to,
-        original.description,
-        userId,
-        id,
-        reason ?? null,
-      ],
-    );
-
-    await db.query('COMMIT');
-    return { reversalId: reversal.rows[0].id, reversalPublicId: reversal.rows[0].public_id };
-  } catch (err) {
-    await db.query('ROLLBACK');
-    throw err;
+  if (!original) {
+    return { error: 'NOT_FOUND_OR_ALREADY_REVERSED' };
   }
+
+  await exec(
+    `UPDATE transactions SET reversed_at = now(), reversed_by = $2, reversal_reason = $3 WHERE id = $1`,
+    [id, userId, reason ?? null],
+  );
+
+  const reversal = await exec(
+    `INSERT INTO transactions
+      (transaction_type, source_type, customer_id, partner_id, expense_category_id,
+       amount, payment_mode, transaction_date, reference_number, plot_number,
+       paid_to, description, created_by, is_reversal, reversed_from_id, reversal_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14, $15)
+     RETURNING id, public_id`,
+    [
+      original.transaction_type,
+      original.source_type,
+      original.customer_id,
+      original.partner_id,
+      original.expense_category_id,
+      original.amount,
+      original.payment_mode,
+      original.transaction_date,
+      original.reference_number,
+      original.plot_number,
+      original.paid_to,
+      original.description,
+      userId,
+      id,
+      reason ?? null,
+    ],
+  );
+
+  return { reversalId: reversal.rows[0].id, reversalPublicId: reversal.rows[0].public_id };
+}
+
+export async function reverseTransaction(id, { userId, reason, client = null }) {
+  // Explicit-client legacy path (manual tx control on the supplied client).
+  if (client) {
+    await client.query('BEGIN');
+    try {
+      const result = await doReverse(id, userId, reason, client.query.bind(client));
+      if (result.error) {
+        await client.query('ROLLBACK');
+        return result;
+      }
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+  }
+  // ALS-aware: join the outer governance/dispatch transaction when present so
+  // an outer ROLLBACK rolls back both the reversal flag and the offset row.
+  // Standalone calls get their own atomic transaction; never nest independent
+  // commits inside an outer transaction.
+  if (isInTransaction()) {
+    return doReverse(id, userId, reason, query);
+  }
+  return withTransactionJoinable(() => doReverse(id, userId, reason, query));
 }
 
 // ---------- Aggregations (authoritative, database-side) ----------
@@ -362,7 +407,7 @@ export function periodSummary({ from, to }) {
 export function dailyTransactions(date) {
   return query(
     `SELECT ${TRANSACTION_COLUMNS} ${JOIN_BASE}
-     WHERE t.transaction_date = $1 AND t.deleted_at IS NULL AND t.reversed_at IS NULL
+     WHERE t.transaction_date = $1 AND t.deleted_at IS NULL AND t.reversed_at IS NULL AND t.is_reversal = false
      ORDER BY t.created_at ASC, t.id ASC`,
     [date],
   ).then((r) => r.rows);
@@ -377,7 +422,7 @@ export function monthlyTransactions({ from, to,  limit, offset }) {
   );
   const listP = query(
     `SELECT ${TRANSACTION_COLUMNS} ${JOIN_BASE}
-     WHERE t.transaction_date BETWEEN $1 AND $2 AND t.deleted_at IS NULL AND t.reversed_at IS NULL
+     WHERE t.transaction_date BETWEEN $1 AND $2 AND t.deleted_at IS NULL AND t.reversed_at IS NULL AND t.is_reversal = false
      ORDER BY t.transaction_date ASC, t.id ASC
      LIMIT $3 OFFSET $4`,
     values,
@@ -406,7 +451,7 @@ export function categoryReport({ from, to }) {
 }
 
 export function recentTransactions(limit = 10, { from, to } = {}) {
-  const where = ['t.deleted_at IS NULL'];
+  const where = ['t.deleted_at IS NULL', 't.reversed_at IS NULL', 't.is_reversal = false'];
   const values = [];
   let idx = 1;
   if (from) {

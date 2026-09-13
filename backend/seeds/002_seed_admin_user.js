@@ -1,12 +1,23 @@
 import bcrypt from 'bcrypt';
 
+// Initial admin user seed.
+//
+// The password comes from SEED_ADMIN_PASSWORD so production can inject a
+// unique secret via the environment. The fallback below is a LOCAL DEV/TEST
+// default only — it must never be used in production.
+//
+// MANUAL ROTATION (no automatic rotation is performed):
+//   1. Prefer setting SEED_ADMIN_PASSWORD to a strong random value BEFORE the
+//      first `npm run seed` on any real environment.
+//   2. After first login, change the password via POST /api/v1/auth/change-password
+//      (or an admin can use the users reset-password flow).
 const ADMIN = {
   username: 'admin',
   fullName: 'System Administrator',
   email: 'admin@dsproperties.local',
   role: 'admin',
-  // Default credentials — CHANGE immediately after first login.
-  password: 'Admin@123',
+  // Dev/test fallback only — override with SEED_ADMIN_PASSWORD everywhere else.
+  password: process.env.SEED_ADMIN_PASSWORD || 'Admin@123',
 };
 
 export async function run(client) {

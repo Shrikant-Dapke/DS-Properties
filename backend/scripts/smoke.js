@@ -1,5 +1,17 @@
 import app from '../src/app.js';
 
+// Local-dev smoke test (runs against the dev DB). Credentials are
+// env-overridable and fall back to the seed's LOCAL DEV default
+// (see backend/seeds/002_seed_admin_user.js) — never use the fallback
+// in production.
+const SMOKE_ADMIN_USERNAME =
+  process.env.SMOKE_ADMIN_USERNAME || process.env.TEST_ADMIN_USERNAME || 'admin';
+const SMOKE_ADMIN_PASSWORD =
+  process.env.SMOKE_ADMIN_PASSWORD ||
+  process.env.SEED_ADMIN_PASSWORD ||
+  process.env.TEST_ADMIN_PASSWORD ||
+  'Admin@123';
+
 const server = app.listen(0, async () => {
   const base = `http://localhost:${server.address().port}`;
   const check = (label, res) => console.log(label, res.status, JSON.stringify(res.body).slice(0, 180));
@@ -11,7 +23,7 @@ const server = app.listen(0, async () => {
     res = await fetch(`${base}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'Admin@123' }),
+      body: JSON.stringify({ username: SMOKE_ADMIN_USERNAME, password: SMOKE_ADMIN_PASSWORD }),
     });
     const login = await res.json();
     check('login', { status: res.status, body: login });

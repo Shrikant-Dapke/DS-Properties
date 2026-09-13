@@ -57,6 +57,9 @@ export default function Users() {
     setFormOpen(true);
   };
 
+  const pendingToast = (result, directMessage) =>
+    toast.success(result?.changeRequest?.status === 'PENDING' ? 'Submitted for admin approval' : directMessage);
+
   const save = async () => {
     if (!form.username.trim()) {
       toast.error('Username is required');
@@ -75,19 +78,19 @@ export default function Users() {
           setSaving(false);
           return;
         }
-        await userApi.create({
+        const result = await userApi.create({
           username: form.username.trim(),
           password: form.password,
           fullName: form.fullName.trim(),
           role: form.role,
         });
-        toast.success('User created');
+        pendingToast(result, 'User created');
       } else {
-        await userApi.update(editing.publicId, {
+        const result = await userApi.update(editing.publicId, {
           fullName: form.fullName.trim() || undefined,
           role: form.role,
         });
-        toast.success('User updated');
+        pendingToast(result, 'User updated');
       }
       setFormOpen(false);
       load();
@@ -100,8 +103,8 @@ export default function Users() {
 
   const toggleActive = async (row) => {
     try {
-      await userApi.setActive(row.publicId, !row.isActive);
-      toast.success(row.isActive ? 'User deactivated' : 'User activated');
+      const result = await userApi.setActive(row.publicId, !row.isActive);
+      pendingToast(result, row.isActive ? 'User deactivated' : 'User activated');
       load();
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to update status');
@@ -115,8 +118,8 @@ export default function Users() {
     }
     setSaving(true);
     try {
-      await userApi.resetPassword(resetting.publicId, newPassword);
-      toast.success('Password reset');
+      const result = await userApi.resetPassword(resetting.publicId, newPassword);
+      pendingToast(result, 'Password reset');
       setResetting(null);
       setNewPassword('');
     } catch (err) {
@@ -128,8 +131,8 @@ export default function Users() {
 
   const confirmDelete = async () => {
     try {
-      await userApi.remove(deleting.publicId);
-      toast.success('User deleted');
+      const result = await userApi.remove(deleting.publicId);
+      pendingToast(result, 'User deleted');
       setDeleting(null);
       load();
     } catch (err) {
