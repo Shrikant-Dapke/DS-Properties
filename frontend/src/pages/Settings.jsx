@@ -8,7 +8,7 @@ import { Card } from '../components/common/Card.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
 import { formatDateTime, titleCase } from '../utils/formatters.js';
-import { isAdmin } from '../contexts/authContextDef.js';
+import { canOperate } from '../contexts/authContextDef.js';
 
 const editableLabels = {
   company_name: 'Company name',
@@ -47,8 +47,12 @@ export default function Settings() {
           return;
         }
       }
-      await settingsApi.update(key, value);
-      toast.success(`${editableLabels[key] || key} updated`);
+      const result = await settingsApi.update(key, value);
+      toast.success(
+        result?.changeRequest?.status === 'PENDING'
+          ? 'Submitted for partner approval'
+          : `${editableLabels[key] || key} updated`,
+      );
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Update failed');
     }
@@ -62,16 +66,16 @@ export default function Settings() {
     <div>
       <PageHeader title="Settings" subtitle="Application configuration" />
 
-      {!isAdmin(user) && (
+      {!canOperate(user) && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Settings are view-only for your role.
+          Settings are view-only for your role. Partners propose changes, which need unanimous partner approval.
         </div>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {settings?.map((s) => {
           const isNumeric = numericKeys.has(s.key);
-          const isEditable = isAdmin(user) && s.key in editableLabels;
+          const isEditable = canOperate(user) && s.key in editableLabels;
           return (
             <Card key={s.key} title={editableLabels[s.key] || titleCase(s.key)} subtitle={s.description}>
               {isEditable ? (

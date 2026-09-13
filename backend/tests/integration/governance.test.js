@@ -1,15 +1,17 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { cancelChange } from '../../src/services/governanceService.js';
-import { getAdminToken, authHeader, login, setupViewer, setupSecondAdmin } from '../helpers/api.js';
+import { getAdminToken, authHeader, login, setupPartner, setupSecondAdmin } from '../helpers/api.js';
 
 describe('Access control & governance', () => {
   let adminToken;
-  let viewer;
+  let stranger;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
-    viewer = await setupViewer();
+    // Partner outside every snapshot in this file: proves non-approvers and
+    // non-managers are rejected without spending per-test logins.
+    stranger = await setupPartner(adminToken, 'stranger');
   });
 
   async function deleteUser(publicId) {
@@ -65,7 +67,7 @@ describe('Access control & governance', () => {
       expect(res.status).toBe(400);
     });
 
-    it('accepts admin and read_only roles', async () => {
+    it('accepts admin and partner roles, rejects read_only', async () => {
       // Ensure a second active admin so governed deletes have a non-target
       // quorum completer (final approver must not be the target itself).
       const a2early = await setupSecondAdmin();
@@ -86,12 +88,30 @@ describe('Access control & governance', () => {
         expect(approved.changeRequest.status).toBe('APPROVED');
         aId = approved.entity.publicId;
       }
+      // Partner users require a linked record.
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `RoleRec_${Date.now()}` });
+      expect(prec.status).toBe(201);
       const r = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `ro_${Date.now()}`, password: 'Test@1234', fullName: 'RO', role: 'read_only' });
+        .send({
+          username: `pt_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'PT',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
       expect(r.status).toBe(201);
       const rId = r.body.data.entity.publicId;
+      // read_only is retired: not creatable in production.
+      const ro = await request(app)
+        .post('/api/v1/users')
+        .set(authHeader(adminToken))
+        .send({ username: `ro_${Date.now()}`, password: 'Test@1234', fullName: 'RO', role: 'read_only' });
+      expect(ro.status).toBe(400);
       // Deleting an ADMIN is governed: approve with the target's own token
       // first, then a non-target admin last to complete quorum.
       const aLogin = await login(adminUsername, 'Test@1234');
@@ -101,25 +121,25 @@ describe('Access control & governance', () => {
     });
   });
 
-  describe('read_only cannot mutate', () => {
-    it('cannot create a customer', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
+  describe('partner cannot manage users', () => {
+    it('cannot create a user', async () => {
       const res = await request(app)
-        .post('/api/v1/customers')
-        .set(authHeader(vToken))
-        .send({ name: 'X' });
+        .post('/api/v1/users')
+        .set(authHeader(stranger.accessToken))
+        .send({ username: 'X', password: 'Test@1234', fullName: 'X', role: 'partner' });
       expect(res.status).toBe(403);
     });
 
-    it('cannot reach approval APIs', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
-      const list = await request(app).get('/api/v1/change-requests').set(authHeader(vToken));
-      expect(list.status).toBe(403);
+    it('cannot reach decisions outside its snapshot', async () => {
+      const list = await request(app).get('/api/v1/change-requests').set(authHeader(stranger.accessToken));
+      expect(list.status).toBe(200);
+      // Well-formed but nonexistent id: passes validation, service finds
+      // nothing (proves the call reaches the service layer and fails closed).
       const approve = await request(app)
-        .post('/api/v1/change-requests/00000000-0000-0000-0000-000000000000/approve')
-        .set(authHeader(vToken))
+        .post('/api/v1/change-requests/123e4567-e89b-42d3-a456-426614174000/approve')
+        .set(authHeader(stranger.accessToken))
         .send({});
-      expect(approve.status).toBe(403);
+      expect(approve.status).toBe(404);
     });
   });
 
@@ -144,11 +164,21 @@ describe('Access control & governance', () => {
       return { ...entity, accessToken: loginData.accessToken };
     }
 
-    it('creating a read_only user is a direct admin action (no change request)', async () => {
+    it('creating a partner user is a direct admin action (no change request)', async () => {
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `DirectRec_${Date.now()}` });
       const res = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `rodir_${Date.now()}`, password: 'Test@1234', fullName: 'RO', role: 'read_only' });
+        .send({
+          username: `ptdir_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'PT',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
       expect(res.status).toBe(201);
       expect(res.body.data.changeRequest).toBeNull();
       expect(res.body.data.entity.publicId).toBeTruthy();
@@ -171,15 +201,25 @@ describe('Access control & governance', () => {
       await deleteAdminGoverned(resolved.entity.publicId, [targetLogin.accessToken, a2.accessToken]);
     });
 
-    it('promoting a read_only user to admin is governed', async () => {
+    it('promoting a partner user to admin is governed', async () => {
       const a2 = await approver();
-      const ro = await request(app)
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `PromRec_${Date.now()}` });
+      const pt = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `prom_${Date.now()}`, password: 'Test@1234', fullName: 'P', role: 'read_only' });
-      const roId = ro.body.data.entity.publicId;
+        .send({
+          username: `prom_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'P',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
+      const ptId = pt.body.data.entity.publicId;
       const res = await request(app)
-        .put(`/api/v1/users/${roId}`)
+        .put(`/api/v1/users/${ptId}`)
         .set(authHeader(adminToken))
         .send({ role: 'admin' });
       expect(res.status).toBe(200);
@@ -190,17 +230,22 @@ describe('Access control & governance', () => {
       await deleteAdminGoverned(resolved.entity.publicId, [promotedLogin.accessToken, a2.accessToken]);
     });
 
-    it('demoting an admin to read_only is governed', async () => {
+    it('demoting an admin to partner is governed', async () => {
       const a2 = await approver();
       const target = await freshAdmin();
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `DemRec_${Date.now()}` });
       const res = await request(app)
         .put(`/api/v1/users/${target.publicId}`)
         .set(authHeader(adminToken))
-        .send({ role: 'read_only' });
+        .send({ role: 'partner', partnerPublicId: prec.body.data.entity.publicId });
       expect(res.status).toBe(200);
       expect(res.body.data.changeRequest.status).toBe('PENDING');
       const resolved = await approveAll(res.body.data.changeRequest.publicId, [a2.accessToken, target.accessToken]);
       expect(resolved.changeRequest.status).toBe('APPROVED');
+      expect(resolved.entity.role).toBe('partner');
       await deleteUser(resolved.entity.publicId);
     });
 
@@ -222,32 +267,52 @@ describe('Access control & governance', () => {
       await deleteAdminGoverned(resolved.entity.publicId, [a2.accessToken]);
     });
 
-    it('deactivating a read_only user is a direct admin action', async () => {
-      const ro = await request(app)
+    it('deactivating a partner user is a direct admin action', async () => {
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `DeactRec_${Date.now()}` });
+      const pt = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `rodeact_${Date.now()}`, password: 'Test@1234', fullName: 'RO', role: 'read_only' });
+        .send({
+          username: `ptdeact_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'PT',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
       const res = await request(app)
-        .patch(`/api/v1/users/${ro.body.data.entity.publicId}/active`)
+        .patch(`/api/v1/users/${pt.body.data.entity.publicId}/active`)
         .set(authHeader(adminToken))
         .send({ isActive: false });
       expect(res.status).toBe(200);
       expect(res.body.data.changeRequest).toBeNull();
-      await deleteUser(ro.body.data.entity.publicId);
+      await deleteUser(pt.body.data.entity.publicId);
     });
 
-    it('resetting a read_only password is a direct admin action', async () => {
-      const ro = await request(app)
+    it('resetting a partner password is a direct admin action', async () => {
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `PwRec_${Date.now()}` });
+      const pt = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `ropw_${Date.now()}`, password: 'Test@1234', fullName: 'RO', role: 'read_only' });
+        .send({
+          username: `ptpw_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'PT',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
       const res = await request(app)
-        .post(`/api/v1/users/${ro.body.data.entity.publicId}/reset-password`)
+        .post(`/api/v1/users/${pt.body.data.entity.publicId}/reset-password`)
         .set(authHeader(adminToken))
         .send({ newPassword: 'NewPass@99' });
       expect(res.status).toBe(200);
       expect(res.body.data.changeRequest).toBeNull();
-      await deleteUser(ro.body.data.entity.publicId);
+      await deleteUser(pt.body.data.entity.publicId);
     });
   });
 
@@ -330,12 +395,22 @@ describe('Access control & governance', () => {
       expect(again.status).toBe(404);
     });
 
-    it('deleting a read_only user stays a direct admin action', async () => {
-      const ro = await request(app)
+    it('deleting a partner user stays a direct admin action', async () => {
+      const prec = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(adminToken))
+        .send({ name: `DelRec_${Date.now()}` });
+      const pt = await request(app)
         .post('/api/v1/users')
         .set(authHeader(adminToken))
-        .send({ username: `p0ro_${Date.now()}`, password: 'Test@1234', fullName: 'P0RO', role: 'read_only' });
-      const del = await deleteUser(ro.body.data.entity.publicId);
+        .send({
+          username: `p0pt_${Date.now()}`,
+          password: 'Test@1234',
+          fullName: 'P0PT',
+          role: 'partner',
+          partnerPublicId: prec.body.data.entity.publicId,
+        });
+      const del = await deleteUser(pt.body.data.entity.publicId);
       expect(del.status).toBe(200);
       expect(del.body.data.changeRequest).toBeNull();
     });
@@ -372,13 +447,11 @@ describe('Access control & governance', () => {
         .set(authHeader(adminToken))
         .send({ newPassword: 'Quorum@123' });
       const crPublicId = res.body.data.changeRequest.publicId;
-      // Requester (seed admin) already approved; a non-required read_only
-      // approval attempt is blocked, and the request stays PENDING. Reuse the
-      // cached viewer token to avoid extra /auth/login rate-limit pressure.
-      const vToken = viewer.accessToken;
+      // Requester (seed admin) already approved; an outsider partner who is
+      // not a required approver is blocked, and the request stays PENDING.
       const blocked = await request(app)
         .post(`/api/v1/change-requests/${crPublicId}/approve`)
-        .set(authHeader(vToken))
+        .set(authHeader(stranger.accessToken))
         .send({});
       expect(blocked.status).toBe(403);
       const still = await request(app).get(`/api/v1/change-requests/${crPublicId}`).set(authHeader(adminToken));
@@ -402,15 +475,14 @@ describe('Access control & governance', () => {
       await deleteAdminGoverned(entity.publicId, [accessToken, a2.accessToken]);
     });
 
-    it('read_only role cannot delete users, reset passwords, or approve requests', async () => {
+    it('partner role cannot manage users, reset passwords, or approve outside snapshot', async () => {
       // Reuse the fresh target's own token for cleanup (no extra login).
       const { a2, entity, accessToken } = await freshAdminTarget();
-      const vToken = viewer.accessToken;
-      const del = await request(app).delete(`/api/v1/users/${entity.publicId}`).set(authHeader(vToken));
+      const del = await request(app).delete(`/api/v1/users/${entity.publicId}`).set(authHeader(stranger.accessToken));
       expect(del.status).toBe(403);
       const reset = await request(app)
         .post(`/api/v1/users/${entity.publicId}/reset-password`)
-        .set(authHeader(vToken))
+        .set(authHeader(stranger.accessToken))
         .send({ newPassword: 'Blocked@123' });
       expect(reset.status).toBe(403);
       // Cleanup with real admins (target first, non-target last) — reuse the
@@ -476,11 +548,11 @@ describe('Access control & governance', () => {
       const crPublicId = pending.body.data.changeRequest.publicId;
       expect(pending.body.data.changeRequest.status).toBe('PENDING');
 
-      // A read_only user is not a required approver: RBAC rejects the cancel.
-      // Reuses the cached viewer token — no extra /auth/login (rate-limited).
+      // A partner outside the approver snapshot is rejected: route-level RBAC
+      // lets partners reach the endpoint, membership enforcement rejects.
       const blocked = await request(app)
         .post(`/api/v1/change-requests/${crPublicId}/cancel`)
-        .set(authHeader(viewer.accessToken))
+        .set(authHeader(stranger.accessToken))
         .send({ reason: 'intruder' });
       expect(blocked.status).toBe(403);
 

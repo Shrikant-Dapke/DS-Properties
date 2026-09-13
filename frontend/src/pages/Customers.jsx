@@ -13,7 +13,7 @@ import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Modal } from '../components/common/Modal.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { formatINR, formatDate } from '../utils/formatters.js';
-import { canWrite, isAdmin } from '../contexts/authContextDef.js';
+import { canOperate } from '../contexts/authContextDef.js';
 
 const empty = { name: '', phone: '', email: '', address: '', notes: '' };
 
@@ -68,16 +68,19 @@ export default function Customers() {
     setFormOpen(true);
   };
 
+  const pendingToast = (result, directMessage) =>
+    toast.success(result?.changeRequest?.status === 'PENDING' ? 'Submitted for partner approval' : directMessage);
+
   const save = async () => {
     setSaving(true);
     try {
       const payload = { ...form, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, notes: form.notes || undefined };
       if (editing) {
-        await customerApi.update(editing.publicId, payload);
-        toast.success('Customer updated');
+        const result = await customerApi.update(editing.publicId, payload);
+        pendingToast(result, 'Customer updated');
       } else {
-        await customerApi.create(payload);
-        toast.success('Customer added');
+        const result = await customerApi.create(payload);
+        pendingToast(result, 'Customer added');
       }
       setFormOpen(false);
       load();
@@ -90,8 +93,8 @@ export default function Customers() {
 
   const confirmDelete = async () => {
     try {
-      await customerApi.remove(deleting.publicId);
-      toast.success('Customer deleted');
+      const result = await customerApi.remove(deleting.publicId);
+      pendingToast(result, 'Customer deleted');
       setDeleting(null);
       load();
     } catch (err) {
@@ -131,16 +134,14 @@ export default function Customers() {
       align: 'right',
       render: (r) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {canWrite(user) && (
+          {canOperate(user) && (
             <>
               <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
-              {isAdmin(user) && (
-                <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
             </>
           )}
         </div>
@@ -153,7 +154,7 @@ export default function Customers() {
       <PageHeader
         title="Customers"
         subtitle="People who buy plots"
-        actions={canWrite(user) && (
+        actions={canOperate(user) && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Add customer
           </Button>
@@ -217,7 +218,7 @@ export default function Customers() {
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
           />
         </div>
-        {editing && isAdmin(user) && (
+        {editing && canOperate(user) && (
           <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
             <Button variant="ghost" className="text-red-600" onClick={() => { setFormOpen(false); setDeleting(editing); }}>
               <Trash2 className="h-4 w-4" /> Delete

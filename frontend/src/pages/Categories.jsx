@@ -11,7 +11,7 @@ import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Modal } from '../components/common/Modal.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { Badge } from '../components/common/Badge.jsx';
-import { isAdmin } from '../contexts/authContextDef.js';
+import { canOperate } from '../contexts/authContextDef.js';
 
 const empty = { name: '', slug: '', description: '', sortOrder: 0, isActive: true };
 
@@ -25,6 +25,9 @@ export default function Categories() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
+
+  const pendingToast = (result, directMessage) =>
+    toast.success(result?.changeRequest?.status === 'PENDING' ? 'Submitted for partner approval' : directMessage);
 
   const load = async () => {
     setLoading(true);
@@ -65,18 +68,18 @@ export default function Categories() {
     setSaving(true);
     try {
       const payload = {
-        name: form.name,
-        slug: form.slug || undefined,
+        name: form.name.trim(),
+        slug: form.slug.trim(),
         description: form.description || undefined,
         sortOrder: Number(form.sortOrder) || 0,
       };
       if (editing) {
         payload.isActive = form.isActive;
-        await categoryApi.update(editing.publicId, payload);
-        toast.success('Category updated');
+        const result = await categoryApi.update(editing.publicId, payload);
+        pendingToast(result, 'Category updated');
       } else {
-        await categoryApi.create(payload);
-        toast.success('Category added');
+        const result = await categoryApi.create(payload);
+        pendingToast(result, 'Category added');
       }
       setFormOpen(false);
       load();
@@ -89,8 +92,8 @@ export default function Categories() {
 
   const confirmDelete = async () => {
     try {
-      await categoryApi.remove(deleting.publicId);
-      toast.success('Category deleted');
+      const result = await categoryApi.remove(deleting.publicId);
+      pendingToast(result, 'Category deleted');
       setDeleting(null);
       load();
     } catch (err) {
@@ -118,7 +121,7 @@ export default function Categories() {
       align: 'right',
       render: (r) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {isAdmin(user) && (
+          {canOperate(user) && (
             <>
               <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
                 <Pencil className="h-3.5 w-3.5" />
@@ -138,7 +141,7 @@ export default function Categories() {
       <PageHeader
         title="Expense categories"
         subtitle="Categories used to classify outtakes"
-        actions={isAdmin(user) && (
+        actions={canOperate(user) && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Add category
           </Button>

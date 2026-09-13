@@ -29,6 +29,11 @@ export async function authenticate(req, _res, next) {
       username: user.username,
       fullName: user.full_name,
       role: user.role,
+      // Partner identity for business-data governance: the linked partner
+      // record id when this login acts as a partner, otherwise null.
+      // Approver-pool membership is always re-resolved server-side from the
+      // database (see userModel approver pool); this value is identity only.
+      partnerId: user.partner_id ?? null,
     };
     req.tokenType = 'access';
     return next();

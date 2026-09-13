@@ -16,7 +16,7 @@ import { useToast } from '../hooks/useToast.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { formatINR } from '../utils/formatters.js';
 import { DATE_MODES, financialYearRange } from '../utils/dateRange.js';
-import { canWrite } from '../contexts/authContextDef.js';
+import { canOperate } from '../contexts/authContextDef.js';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Card } from '../components/common/Card.jsx';
@@ -93,7 +93,7 @@ export default function Dashboard() {
         title={`Welcome, ${user.fullName || user.username}`}
         subtitle={fy.from && fy.to ? `Financial year ${fy.startYear}–${fy.startYear + 1} (${fy.from} → ${fy.to})` : "Here's what's happening with your finances"}
         actions={
-          canWrite(user) && (
+          canOperate(user) && (
             <Link
               to="/entries/new"
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"

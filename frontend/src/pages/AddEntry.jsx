@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, Info } from 'lucide-react';
 import { customerApi, partnerApi, categoryApi, transactionApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.js';
+import { useAuth } from '../hooks/useAuth.js';
+import { isPartner } from '../contexts/authContextDef.js';
 import { Button } from '../components/common/Button.jsx';
 import { Input } from '../components/common/Input.jsx';
 import { Select } from '../components/common/Select.jsx';
@@ -35,6 +37,7 @@ const emptyForm = {
 export default function AddEntry() {
   const toast = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
 
@@ -181,15 +184,24 @@ export default function AddEntry() {
       if (editId && versionTag) payload.versionTag = versionTag;
       const result = editId ? await transactionApi.update(editId, payload) : await transactionApi.create(payload);
 
-      if (result?.duplicateWarning) {
+      // Governed creates return { changeRequest, entity, meta }; direct
+      // responses carry the duplicate flags at the top level.
+      const duplicateWarning = result?.duplicateWarning ?? result?.meta?.duplicateWarning;
+      if (duplicateWarning) {
+        const duplicates = result?.duplicates ?? result?.meta?.duplicates ?? [];
         setDuplicate({
-          count: result.duplicates?.length || 0,
+          count: duplicates.length || 0,
+          pending: result?.changeRequest?.status === 'PENDING',
           onContinue: () => navigate('/transactions'),
         });
         return;
       }
 
-      toast.success(editId ? 'Entry updated' : isOuttake ? 'Outtake recorded' : 'Intake recorded');
+      if (result?.changeRequest?.status === 'PENDING') {
+        toast.success('Submitted for partner approval — it will apply after all other partners approve');
+      } else {
+        toast.success(editId ? 'Entry updated' : isOuttake ? 'Outtake recorded' : 'Intake recorded');
+      }
       navigate('/transactions');
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to save entry');
@@ -212,6 +224,12 @@ export default function AddEntry() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title={editId ? 'Edit Entry' : 'Add Entry'} subtitle={editId ? 'Update an existing entry' : 'Record an intake or outtake'} />
+
+      {isPartner(user) && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This change requires approval from all other active partners before it applies. Track it on the Approvals page.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Card>
@@ -382,8 +400,10 @@ export default function AddEntry() {
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             A similar entry was already recorded in the last 15 minutes ({duplicate?.count || 0} possible duplicate
-            {duplicate?.count === 1 ? '' : 's'}). Your entry has been saved, but please review it before recording more
-            entries.
+            {duplicate?.count === 1 ? '' : 's'}).{' '}
+            {duplicate?.pending
+              ? 'Your proposal was submitted for partner approval, but please review it before recording more entries.'
+              : 'Your entry has been saved, but please review it before recording more entries.'}
           </span>
         </div>
       </Modal>

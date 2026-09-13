@@ -1,5 +1,5 @@
 import { submitChange } from '../services/governanceService.js';
-import { verifyAdminPassword } from '../services/authService.js';
+import { verifyUserPassword } from '../services/authService.js';
 import { ValidationError } from '../utils/errors.js';
 import {
   getTransaction,
@@ -60,13 +60,15 @@ export async function deleteTransaction(req, res) {
   const ctx = buildContext(req);
   const { adminPassword, reason, versionTag, expectedVersion } = req.body ?? {};
   if (!adminPassword) {
-    throw new ValidationError('Admin password is required', [
+    throw new ValidationError('Password confirmation is required', [
       { field: 'adminPassword', message: '"adminPassword" is required' },
     ]);
   }
-  // Canonical destructive-action auth: re-verify the authenticated admin's
-  // password directly (never via change-requests). Throws 401 when wrong.
-  await verifyAdminPassword(ctx.userId, adminPassword);
+  // Destructive-action re-authentication: re-verify the requesting partner's
+  // OWN password directly (never via change-requests). Throws 401 when wrong.
+  // The field keeps its historical name; it always carries the requester's
+  // own password and is stripped before governance persistence/audit.
+  await verifyUserPassword(ctx.userId, adminPassword);
   const result = await submitChange({
     entityType: 'transaction',
     entityId: req.params.id,
@@ -83,11 +85,11 @@ export async function reverseTransaction(req, res) {
   const ctx = buildContext(req);
   const { adminPassword, reason, versionTag, expectedVersion } = req.body ?? {};
   if (!adminPassword) {
-    throw new ValidationError('Admin password is required', [
+    throw new ValidationError('Password confirmation is required', [
       { field: 'adminPassword', message: '"adminPassword" is required' },
     ]);
   }
-  await verifyAdminPassword(ctx.userId, adminPassword);
+  await verifyUserPassword(ctx.userId, adminPassword);
   const result = await submitChange({
     entityType: 'transaction',
     entityId: req.params.id,

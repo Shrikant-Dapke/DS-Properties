@@ -3,6 +3,7 @@ import {
   approveChange,
   rejectChange,
   cancelChange,
+  viewerDecisionState,
 } from '../services/governanceService.js';
 import { getChangeRequestByPublicId } from '../models/changeRequestModel.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
@@ -21,13 +22,16 @@ export async function listChangeRequests(req, res) {
     limit,
     offset: offset(page, limit),
   });
-  res.json({ success: true, data: { rows, pagination: buildPagination(page, limit, total) } });
+  // Authoritative per-viewer decision state: the UI renders Approve/Reject
+  // from these flags, never from role inference.
+  const withViewerState = rows.map((row) => ({ ...row, ...viewerDecisionState(row, req.user.id) }));
+  res.json({ success: true, data: { rows: withViewerState, pagination: buildPagination(page, limit, total) } });
 }
 
 export async function getChangeRequest(req, res) {
   const request = await getChangeRequestByPublicId(req.params.id);
   if (!request) throw new NotFoundError('Change request not found');
-  res.json({ success: true, data: request });
+  res.json({ success: true, data: { ...request, ...viewerDecisionState(request, req.user.id) } });
 }
 
 export async function approveChangeHandler(req, res) {

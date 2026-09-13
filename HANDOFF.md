@@ -66,13 +66,15 @@ npm run build      # outputs frontend/dist/ — serve over HTTPS
 - **Login** — username + password. 5 wrong attempts lock the account ~15 minutes.
 - **Dashboard** — balances for the selected period (defaults to the financial year
   starting April). Use the date filter for custom ranges.
-- **Add Entry** — Intake (customer receipt / partner capital / partner loan) or
-  Outtake (expense category + payee required). A "possible duplicate" dialog is a
-  warning only; the entry is already saved.
-- **Transactions** — search/filter, click a row for details, Edit, Reverse, or
-  Delete. Reverse/Delete ask for the admin password again and are audited.
-  If you see *"Transaction changed since you loaded it"* (`STALE_CONFLICT`),
-  someone else modified the entry — reload and retry.
+- **Add Entry** (partners) — Intake (customer receipt / partner capital /
+  partner loan) or Outtake (expense category + payee required). Saving submits
+  a change request: nothing applies until all other active partners approve it
+  on the **Approvals** page. A "possible duplicate" dialog is a warning only.
+- **Transactions** (partners) — search/filter, click a row for details, Edit,
+  Reverse, or Delete. Everything is a proposal: Reverse/Delete ask for your own
+  password again and are audited. If you see *"Transaction changed since you
+  loaded it"* (`STALE_CONFLICT`), someone else modified the entry — reload and
+  retry.
 - **Reports** — Monthly/Daily/Categories/Partner tabs with PDF/Excel export.
   If a period shows *"Showing the first 1,000 of N transactions"*, narrow the
   date range; the summary totals always cover the full period.
@@ -81,14 +83,34 @@ npm run build      # outputs frontend/dist/ — serve over HTTPS
 
 ## 3. Administration (admin guide summary)
 
-- **Roles** — `admin` (everything) and `read_only` (view only; cannot create,
-  edit, delete, reverse, approve, or change settings).
-- **Sensitive operations need multi-admin approval**: creating an admin,
+There are exactly three account types: `developer`, `partner`, `admin`.
+
+- **Developer (owner only)** — full access, applies business changes directly
+  without partner approval. Provisioned ONLY via `SEED_DEVELOPER_*` on a fresh
+  database or `npm run provision-developer` on an existing one (both need
+  owner shell + secrets). Can never be created, promoted-to, modified, or
+  deleted through the application by anyone, including admins. Rotate via
+  change-password (self) or `provision-developer --reset`.
+- **Roles** — `partner` (business-data operator: proposes every create/edit/
+  delete/reverse; approves other partners' proposals), `admin` (supervises:
+  views business data, reports, audit; manages users and partner membership;
+  cannot mutate business data).
+- **Partner governance (business data)**: transactions, customers, categories,
+  and financial settings. A proposal shows *"Submitted for partner approval"*
+  and appears under **Approvals** as `PENDING`. **All other active partners
+  must approve** (quorum = every active partner except the requester, frozen
+  at creation); the requester can never approve their own request, and one
+  rejection stops execution. With no other active partners, proposals fail
+  with `409 NO_PARTNER_QUORUM` — escalate membership to an admin instead.
+- **Partner identity**: each partner login is linked to exactly one partner
+  record (Users page, admin-only). Deactivating a partner user or record
+  removes them from future quorums; in-flight requests keep their frozen
+  approver set.
+- **Sensitive admin operations need multi-admin approval**: creating an admin,
   promoting to admin, demoting an admin, deactivating an admin, deleting an
-  admin, resetting an admin's password. The action shows *"Submitted for admin
-  approval"* and appears under **Approvals** as `PENDING`. **Every active admin
-  must approve** (quorum = all active admins); the requester counts as one.
-  The same actions on `read_only` users apply immediately.
+  admin, resetting an admin's password. **Every active admin must approve**;
+  the requester counts as one. The same actions on `read_only`/`partner`
+  users apply immediately (audited).
 - **Approvals page** — approve or reject with an optional comment; progress
   shows as e.g. `2/3`. A pending request can be cancelled by the requester or
   any required approver.
@@ -126,6 +148,9 @@ npm run build      # outputs frontend/dist/ — serve over HTTPS
 | `Invalid or expired access token` after idle | access token is 15 min by design; the app refreshes silently — if refresh also expired (7 days), log in again |
 | `409 STALE_CONFLICT` on edit/delete/reverse | entry changed since opened → reload the row and retry |
 | `403` for a `read_only` user | expected — read_only cannot mutate, approve, or admin-manage |
+| `403` for an `admin` on create/edit/delete/reverse | expected — admins supervise business data but cannot mutate it; use a partner login |
+| `403` for a `partner` on user management | expected — partners operate business data; only admins/developers manage users |
+| `409 NO_PARTNER_QUORUM` on propose | sole active partner (or none besides you) — ask an admin to activate another partner, then retry |
 | `429 RATE_LIMITED` | >20 auth or >300 general requests / 15 min → wait and retry |
 | Report list shorter than expected | 1,000-row display cap with on-screen notice → narrow the range; totals are unaffected |
 | Dashboard numbers look stale | aggregates cache ~30–60 s and invalidate on every financial write; hard-refresh after waiting a minute |

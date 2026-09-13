@@ -1,36 +1,34 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { getAdminToken, authHeader } from '../helpers/api.js';
-import { TEST_ADMIN_PASSWORD } from '../helpers/testCredentials.js';
+import { getAdminToken, authHeader, setupPartnerQuorum, proposeAndApprove } from '../helpers/api.js';
 
-describe('Financial correctness', () => {
+const PARTNER_PW = 'Test@1234';
+
+describe('Financial correctness (via partner governance)', () => {
   let adminToken;
+  let Q;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
-    // Opening balance = 100,000
-    const res = await request(app)
-      .put('/api/v1/settings/opening_balance')
-      .set(authHeader(adminToken))
-      .send({ value: 100000 });
-    expect(res.status).toBe(200);
+    Q = await setupPartnerQuorum(adminToken, 2, 'fin');
+    // Opening balance = 100,000 (financial setting: partner-governed).
+    const { changeRequest, entity } = await proposeAndApprove(Q, 'put', '/api/v1/settings/opening_balance', { value: 100000 });
+    if (changeRequest.status !== 'APPROVED') throw new Error(`opening balance not approved: ${JSON.stringify(changeRequest)}`);
+    if (Number(entity.value) !== 100000) throw new Error('opening balance mismatch');
   });
 
   async function createCustomer(name) {
-    const res = await request(app)
-      .post('/api/v1/customers')
-      .set(authHeader(adminToken))
-      .send({ name });
-    expect(res.status).toBe(201);
-    return res.body.data.entity.publicId;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/customers', { name });
+    return entity.publicId;
   }
 
+  // Partner directory records remain admin-managed (membership, not business data).
   async function createPartner(name) {
     const res = await request(app)
       .post('/api/v1/partners')
       .set(authHeader(adminToken))
       .send({ name });
-    expect(res.status).toBe(201);
+    if (res.status !== 201) throw new Error(`createPartner failed: ${JSON.stringify(res.body)}`);
     return res.body.data.entity.publicId;
   }
 
@@ -43,28 +41,20 @@ describe('Financial correctness', () => {
     const body = { transactionType: 'intake', sourceType, amount, paymentMode: 'cash', transactionDate: date };
     if (customerId) body.customerPublicId = customerId;
     if (partnerId) body.partnerPublicId = partnerId;
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send(body);
-    expect(res.status).toBe(201);
-    return res.body.data.entity;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/transactions', body);
+    return entity;
   }
 
   async function outtake({ categoryId, amount, date }) {
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        amount,
-        paymentMode: 'bank_transfer',
-        transactionDate: date,
-        categoryPublicId: categoryId,
-        paidTo: 'Contractor',
-      });
-    expect(res.status).toBe(201);
-    return res.body.data.entity;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/transactions', {
+      transactionType: 'outtake',
+      amount,
+      paymentMode: 'bank_transfer',
+      transactionDate: date,
+      categoryPublicId: categoryId,
+      paidTo: 'Contractor',
+    });
+    return entity;
   }
 
   it('computes the exact expected balance from the spec scenario', async () => {
@@ -117,16 +107,15 @@ describe('Financial correctness', () => {
     expect(Number(d.balance.balanceAtEndOfDay)).toBe(265000);
   });
 
-  it('does not double-count after a reversal', async () => {
+  it('does not double-count after a governed reversal', async () => {
     const DATE = '2026-05-05';
     const customer = await createCustomer('Reversal Customer');
     const tx = await intake({ sourceType: 'customer', customerId: customer, amount: 30000, date: DATE });
 
-    const reverseRes = await request(app)
-      .post(`/api/v1/transactions/${tx.publicId}/reverse`)
-      .set(authHeader(adminToken))
-      .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'entered by mistake' });
-    expect(reverseRes.status).toBe(200);
+    const { changeRequest } = await proposeAndApprove(Q, 'post', `/api/v1/transactions/${tx.publicId}/reverse`, {
+      adminPassword: PARTNER_PW, reason: 'entered by mistake',
+    });
+    expect(changeRequest.status).toBe('APPROVED');
 
     const res = await request(app)
       .get('/api/v1/dashboard/summary')
@@ -137,16 +126,15 @@ describe('Financial correctness', () => {
     expect(Number(d.totals.customerIntake)).toBe(75000);
   });
 
-  it('excludes soft-deleted transactions from the balance', async () => {
+  it('excludes governed soft-deleted transactions from the balance', async () => {
     const DATE = '2026-05-06';
     const customer = await createCustomer('Delete Customer');
     const tx = await intake({ sourceType: 'customer', customerId: customer, amount: 40000, date: DATE });
 
-    const delRes = await request(app)
-      .delete(`/api/v1/transactions/${tx.publicId}`)
-      .set(authHeader(adminToken))
-      .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'cleanup' });
-    expect(delRes.status).toBe(200);
+    const { changeRequest } = await proposeAndApprove(Q, 'delete', `/api/v1/transactions/${tx.publicId}`, {
+      adminPassword: PARTNER_PW, reason: 'cleanup',
+    });
+    expect(changeRequest.status).toBe('APPROVED');
 
     const res = await request(app)
       .get('/api/v1/dashboard/summary')

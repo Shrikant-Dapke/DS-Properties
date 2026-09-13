@@ -111,15 +111,7 @@ export async function addTransaction(data, ctx) {
   // hitting the CHECK constraint so the error is clear.
   validateClassification(txData);
 
-  const duplicates = await findPotentialDuplicates({
-    transactionType: txData.transaction_type,
-    sourceType: txData.source_type,
-    amount: txData.amount,
-    customerId: txData.customer_id,
-    partnerId: txData.partner_id,
-    categoryId: txData.expense_category_id,
-    transactionDate: txData.transaction_date,
-  });
+  const { duplicateWarning, duplicates } = await findDuplicatePreview(data);
 
   const tx = await withTransactionJoinable(async () => {
     const created = await createTransaction(txData);
@@ -144,9 +136,26 @@ export async function addTransaction(data, ctx) {
 
   return {
     transaction: serialize(tx),
-    duplicateWarning: duplicates.length > 0,
-    duplicates: duplicates.map(serialize),
+    duplicateWarning,
+    duplicates,
   };
+}
+
+// Submit-time duplicate preview for governed creates: same detection as
+// addTransaction, without writing anything. Lets the proposer warn about a
+// possible duplicate up front; the check runs again at apply time.
+export async function findDuplicatePreview(data) {
+  const { customerId, partnerId, categoryId } = await resolveReferences(data);
+  const duplicates = await findPotentialDuplicates({
+    transactionType: data.transactionType,
+    sourceType: data.sourceType ?? null,
+    amount: data.amount,
+    customerId,
+    partnerId,
+    categoryId,
+    transactionDate: data.transactionDate,
+  });
+  return { duplicateWarning: duplicates.length > 0, duplicates: duplicates.map(serialize) };
 }
 
 function validateClassification(tx) {

@@ -2,7 +2,7 @@ import { query } from '../config/database.js';
 
 const SELECT_COLUMNS = `
   id, public_id, username, password_hash, full_name, email, phone, role,
-  is_active, failed_login_attempts, locked_until, last_login_at,
+  partner_id, is_active, failed_login_attempts, locked_until, last_login_at,
   created_at, updated_at, deleted_at
 `;
 
@@ -28,12 +28,12 @@ export function findUserByPublicId(publicId) {
   ).then((r) => r.rows[0] || null);
 }
 
-export function createUser({ username, passwordHash, fullName, email, phone, role }) {
+export function createUser({ username, passwordHash, fullName, email, phone, role, partnerId }) {
   return query(
-    `INSERT INTO users (username, password_hash, full_name, email, phone, role)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO users (username, password_hash, full_name, email, phone, role, partner_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${SELECT_COLUMNS}`,
-    [username, passwordHash, fullName, email, phone, role],
+    [username, passwordHash, fullName, email, phone, role, partnerId ?? null],
   ).then((r) => r.rows[0]);
 }
 
@@ -124,4 +124,38 @@ export function softDeleteUser(id) {
     `UPDATE users SET deleted_at = now(), is_active = false WHERE id = $1 RETURNING ${SELECT_COLUMNS}`,
     [id],
   ).then((r) => r.rows[0] || null);
+}
+
+// ---------------------------------------------------------------------------
+// Partner-governance identity pool (server-side approver membership)
+// ---------------------------------------------------------------------------
+// An "active partner" for governance is a login user that: holds the partner
+// role, is active and not deleted, is linked to a partner record, and whose
+// linked partner record is itself active and not deleted. Approver snapshots
+// are always computed from this query — never from client input.
+const PARTNER_POOL_WHERE = `
+  u.role = 'partner'
+  AND u.is_active = true
+  AND u.deleted_at IS NULL
+  AND u.partner_id IS NOT NULL
+  AND p.id IS NOT NULL
+  AND p.is_active = true
+  AND p.deleted_at IS NULL
+`;
+
+export function getActivePartnerUserIds() {
+  return query(
+    `SELECT u.id FROM users u
+     JOIN partners p ON p.id = u.partner_id
+     WHERE ${PARTNER_POOL_WHERE}`,
+  ).then((r) => r.rows.map((row) => row.id));
+}
+
+export function isActivePartnerUser(id) {
+  return query(
+    `SELECT u.id FROM users u
+     LEFT JOIN partners p ON p.id = u.partner_id
+     WHERE u.id = $1 AND ${PARTNER_POOL_WHERE}`,
+    [id],
+  ).then((r) => (r.rows.length > 0 ? r.rows[0] : null));
 }

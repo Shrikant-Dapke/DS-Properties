@@ -92,14 +92,28 @@ export default function Approvals() {
   const myDecision = useMemo(() => {
     const map = {};
     rows.forEach((r) => {
-      const mine = (r.approvals || []).find((a) => String(a.adminUserId) === String(user?.id));
-      map[r.publicId] = mine ? mine.status : null;
+      // Server-derived decision first; legacy client inference only as fallback.
+      const mine = r.viewerDecision
+        ?? (r.approvals || []).find((a) => String(a.adminUserId) === String(user?.id))?.status
+        ?? null;
+      map[r.publicId] = mine;
     });
     return map;
   }, [rows, user?.id]);
 
   const isRequiredApprover = (r) =>
     (r.requiredApprovers || []).map(String).includes(String(user?.id));
+
+  const isRequester = (r) => String(r.requestedBy) === String(user?.id);
+
+  // Approval eligibility comes from SERVER-SUPPLIED authorization state
+  // (viewerCanDecide), never from role inference: only a member of the
+  // request's frozen requiredApprovers snapshot who has not decided yet may
+  // see Approve/Reject. The requester is never in their own snapshot.
+  const canDecideRow = (r) =>
+    r.status === 'PENDING'
+    && (r.viewerCanDecide === true || (r.viewerCanDecide === undefined && isRequiredApprover(r)))
+    && !myDecision[r.publicId];
 
   const openDecide = (row, decision) => {
     setDeciding({ row, decision });
@@ -176,9 +190,13 @@ export default function Approvals() {
       align: 'right',
       render: (r) => {
         const decided = myDecision[r.publicId];
-        const canDecide = r.status === 'PENDING' && isRequiredApprover(r) && !decided;
+        const canDecide = canDecideRow(r);
+        const mine = isRequester(r);
         return (
           <div className="flex justify-end gap-1">
+            {mine && (
+              <span className="mr-1 self-center text-xs font-medium text-slate-400">{t('approvals.yourRequest')}</span>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setDetail(r)}>
               <Eye className="h-3.5 w-3.5" /> {t('common.details')}
             </Button>

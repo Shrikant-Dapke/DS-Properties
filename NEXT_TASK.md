@@ -1,8 +1,15 @@
 # NEXT_TASK
 
-_Updated: 20 Aug 2026_
+_Updated: 13 Sep 2026_
 
-## Status: Ready to ship
+## Status: Three-role model implemented, ready to ship
+
+All spec-scoped features are built, tested, and verified end-to-end, including
+the partner-centric governance model and the owner-only developer account:
+exactly three roles (developer/partner/admin, no read_only); partners propose
+every business-data mutation with unanimous all-other-partners approval;
+admins are read-only for business data; the developer applies directly and is
+provisioned only outside the API (seed/CLI).
 
 All spec-scoped features are built, tested, and verified end-to-end. An audit +
 corrective pass, a customer/partner selector fix, a session-stability fix

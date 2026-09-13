@@ -24,11 +24,11 @@ const router = Router();
 
 router.use(authenticate);
 
-router.post('/', authorize(ROLES.ADMIN), validate(createTransactionSchema), createTransaction);
+router.post('/', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(createTransactionSchema), createTransaction);
 router.get('/', validate(listTransactionQuerySchema, 'query'), listTransactions);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getTransactionById);
-router.patch('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), validate(updateTransactionSchema), updateTransaction);
-router.post('/:id/reverse', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), validate(reverseTransactionSchema), reverseTransaction);
-router.delete('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), validate(destructiveTransactionSchema), deleteTransaction);
+router.patch('/:id', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), validate(updateTransactionSchema), updateTransaction);
+router.post('/:id/reverse', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), validate(reverseTransactionSchema), reverseTransaction);
+router.delete('/:id', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), validate(destructiveTransactionSchema), deleteTransaction);
 
 export default router;

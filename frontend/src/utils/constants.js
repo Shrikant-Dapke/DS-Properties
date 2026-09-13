@@ -1,11 +1,13 @@
 export const ROLES = Object.freeze({
+  DEVELOPER: 'developer',
+  PARTNER: 'partner',
   ADMIN: 'admin',
-  READ_ONLY: 'read_only',
 });
 
 export const ROLE_LABELS = Object.freeze({
+  developer: 'Developer',
+  partner: 'Partner',
   admin: 'Admin',
-  read_only: 'Read only',
 });
 
 export const PAYMENT_MODES = Object.freeze([

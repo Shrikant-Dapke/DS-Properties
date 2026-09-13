@@ -15,7 +15,11 @@ import {
 
 const router = Router();
 
-router.use(authenticate, authorize(ROLES.ADMIN));
+// Partners propose and decide business-data requests; admins and the
+// developer supervise. Decision authorization (snapshot membership, no
+// self-approval, cancellation rules) is enforced server-side in
+// governanceService for every call.
+router.use(authenticate, authorize(ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER));
 
 router.get('/', listChangeRequests);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getChangeRequest);

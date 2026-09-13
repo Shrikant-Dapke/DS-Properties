@@ -23,10 +23,10 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', validate(listPartnerQuerySchema, 'query'), listPartners);
-router.post('/', authorize(ROLES.ADMIN), validate(createPartnerSchema), createPartner);
+router.post('/', authorize(ROLES.ADMIN, ROLES.DEVELOPER), validate(createPartnerSchema), createPartner);
 router.get('/:id/ledger', validate(publicIdParamSchema, 'params'), partnerLedger);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getPartnerById);
-router.put('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), validate(updatePartnerSchema), updatePartner);
-router.delete('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), deletePartner);
+router.put('/:id', authorize(ROLES.ADMIN, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), validate(updatePartnerSchema), updatePartner);
+router.delete('/:id', authorize(ROLES.ADMIN, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), deletePartner);
 
 export default router;

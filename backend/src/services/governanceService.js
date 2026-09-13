@@ -1,5 +1,5 @@
-import { withTransaction, withTransactionJoinable } from '../config/database.js';
-import { SENSITIVE_ROLE } from '../config/constants.js';
+import { query, withTransaction, withTransactionJoinable } from '../config/database.js';
+import { SENSITIVE_ROLE, SOURCE_TYPES, TRANSACTION_TYPES } from '../config/constants.js';
 import { NotFoundError, ConflictError, AuthorizationError, AppError, ValidationError } from '../utils/errors.js';
 import { logAudit } from './auditService.js';
 import { invalidateFinancialCachePublic } from './dashboardService.js';
@@ -14,6 +14,7 @@ import {
   getActiveAdminIds,
   listChangeRequests,
 } from '../models/changeRequestModel.js';
+import { getActivePartnerUserIds, isActivePartnerUser } from '../models/userModel.js';
 import { validateProposedState } from '../validators/governanceValidators.js';
 
 import {
@@ -37,6 +38,7 @@ import {
   removeTransaction,
   reverseExistingTransaction,
   getTransaction,
+  findDuplicatePreview,
 } from './transactionService.js';
 import {
   createNewCustomer,
@@ -294,7 +296,13 @@ async function finalizeApply(request, ctx) {
       }
     }
 
-    const entity = await applyDispatch(req, ctx);
+    const entity = await applyDispatchGuarded(req, ctx, async () => applyDispatch(req, applyCtxFor(req, ctx)));
+    if (entity === null) {
+      // Apply failed with an operational error: the request is already in a
+      // terminal CANCELLED state (see applyDispatchGuarded). Do not mark it
+      // APPROVED; the caller receives the resolved request with no entity.
+      return { entity: null, entityType: req.entityType };
+    }
 
     await setStatus(req.id, 'APPROVED', null);
     await logAudit({
@@ -312,12 +320,196 @@ async function finalizeApply(request, ctx) {
   return applied?.entity ?? null;
 }
 
+// Apply-time failures (target deleted/reversed mid-flight, referential or
+// business-rule violations) must never strand a request PENDING nor surface
+// as an opaque 500 to the approver. Operational errors resolve the request to
+// a terminal CANCELLED state carrying the reason code; the approver gets the
+// resolved request back. Unexpected errors still propagate.
+//
+// The apply runs behind a savepoint: SQL-state failures (unique violations,
+// FK/CHECK breaches like 23505/23503/23514) abort the PostgreSQL transaction,
+// so without ROLLBACK TO even the terminal-state bookkeeping below would fail
+// with 25P02. Rolling back to the savepoint discards the partial mutation
+// while the outer approval transaction stays healthy and commits the
+// CANCELLED status plus the failure audit atomically.
+async function applyDispatchGuarded(req, ctx, apply) {
+  await query('SAVEPOINT gov_apply_guard');
+  try {
+    const result = await apply();
+    await query('RELEASE SAVEPOINT gov_apply_guard');
+    return result;
+  } catch (err) {
+    await query('ROLLBACK TO SAVEPOINT gov_apply_guard');
+    const operational =
+      err instanceof ValidationError || err instanceof NotFoundError || err instanceof ConflictError;
+    if (!operational) throw err;
+    await setStatus(req.id, 'CANCELLED', err.code || 'APPLY_FAILED');
+    await logAudit({
+      userId: ctx.userId,
+      action: 'change_request_apply_failed',
+      domain: 'governance',
+      recordId: req.publicId,
+      newValues: {
+        entityType: req.entityType,
+        entityId: req.entityId,
+        reason: err.code || 'APPLY_FAILED',
+      },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    return null;
+  }
+}
+
+// Attribution for governed application: business-data mutations are credited
+// to the requesting partner (created_by, entity-level audit actor), while the
+// change-request lifecycle audits keep crediting the deciding/finalizing user
+// via the caller's ctx. Falls back to the finalizer when the requester row is
+// gone (requested_by is ON DELETE SET NULL). Admin/system governance keeps
+// crediting the finalizer exactly as before.
+function applyCtxFor(req, ctx) {
+  if (PARTNER_GOVERNED_ENTITIES.has(req.entityType) && req.requestedBy != null) {
+    return { ...ctx, userId: req.requestedBy };
+  }
+  return ctx;
+}
+
 async function tryFinalize(request, ctx) {
   const approvals = await getApprovals(request.id);
   if (approvals.some((a) => a.status === 'REJECTED')) return null;
   const approvedIds = approvals.filter((a) => a.status === 'APPROVED').map((a) => a.adminUserId);
   if (approvedIds.length < request.requiredApprovers.length) return null;
   return finalizeApply(request, ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Universal partner governance for business data
+// ---------------------------------------------------------------------------
+// Business-data mutations (transactions, customers, categories, financial
+// settings) may ONLY be proposed by active partners and apply ONLY after
+// unanimous approval from ALL OTHER active partners. The requester is never
+// an approver and receives no auto-approval. Approver membership is computed
+// server-side from the authoritative pool and frozen on the request.
+// Partner business-RECORD membership (the partners directory itself) stays
+// under admin governance by design: it avoids bootstrap/growth deadlocks
+// (zero partners => nobody could approve; one partner => empty quorum must
+// 409, never auto-approve) while no single admin can act unilaterally.
+const PARTNER_GOVERNED_ENTITIES = new Set(['transaction', 'customer', 'category', 'app_setting']);
+
+async function submitPartnerGovernedChange({ entityType, entityId, operation, proposedState, ctx }) {
+  // Requester must be an active partner with an active linked partner record.
+  const requester = await isActivePartnerUser(ctx.userId);
+  if (!requester) {
+    throw new AuthorizationError('Only active partners can propose business-data changes');
+  }
+
+  // Required approvers: every OTHER active partner, frozen at creation time.
+  // Later membership changes never mutate this snapshot.
+  const pool = await getActivePartnerUserIds();
+  const requiredApprovers = pool.filter((id) => id !== ctx.userId);
+  if (requiredApprovers.length === 0) {
+    // Safe default: never silently auto-approve merely because no other
+    // partner exists. The caller must resolve the membership state first.
+    throw new AppError(
+      'No other active partners are available to approve this change',
+      409,
+      'NO_PARTNER_QUORUM',
+    );
+  }
+
+  let previousState = null;
+  let versionTag = null;
+  if (operation !== 'create') {
+    const snap = await snapshotEntity(entityType, entityId);
+    previousState = snap.previousState;
+    versionTag = snap.versionTag;
+    // End-to-end optimistic concurrency: a client tag supplied at submit time
+    // is checked against the fresh snapshot now (fail fast); the snapshot tag
+    // is re-checked again atomically at apply time.
+    const submittedTag = proposedState?.versionTag ?? proposedState?.expectedVersion;
+    if (submittedTag !== undefined && submittedTag !== null && submittedTag !== '') {
+      if (String(submittedTag) !== String(versionTag)) {
+        throw new ConflictError('Record changed since you loaded it', 'STALE_CONFLICT');
+      }
+    }
+  }
+
+  // Fail fast on incoherent business payloads (the same classification rules
+  // the service layer enforces at apply time). Without this, invalid proposals
+  // would sit PENDING until an approver trips over them.
+  assertSubmittable(entityType, operation, proposedState, previousState);
+
+  // Duplicate preview for transaction creates (warning only, never a block).
+  // Reference failures propagate: an unknown customer/partner/category fails
+  // fast here — before any change-request row exists — instead of becoming a
+  // PENDING request that can never apply.
+  let meta = null;
+  if (entityType === 'transaction' && operation === 'create') {
+    const preview = await findDuplicatePreview(proposedState);
+    meta = { duplicateWarning: preview.duplicateWarning, duplicates: preview.duplicates };
+  }
+
+  const request = await createChangeRequest({
+    entityType,
+    entityId,
+    operation,
+    requestedBy: ctx.userId,
+    previousState,
+    proposedState,
+    requiredApprovers,
+    versionTag,
+  });
+
+  // NOTE: deliberately NO requester auto-approval here. The requester is
+  // never a member of requiredApprovers, so their decision can never count.
+
+  await logAudit({
+    userId: ctx.userId,
+    action: 'change_request_create',
+    domain: 'governance',
+    recordId: request.publicId,
+    newValues: { entityType, operation, entityId },
+    ip: ctx.ip,
+    userAgent: ctx.userAgent,
+  });
+
+  const changeRequest = await getChangeRequestByPublicId(request.publicId);
+  return { changeRequest, entity: null, meta };
+}
+
+// Submit-time mirror of the service-layer classification rules, evaluated on
+// the proposal merged over the snapshot (for updates). Presence-level only:
+// referential existence is still verified at apply time. Keeps invalid
+// proposals from ever becoming PENDING change requests.
+function assertSubmittable(entityType, operation, proposedState, previousState) {
+  if (entityType !== 'transaction') return;
+  const prev = previousState ?? {};
+  const effective = {
+    transactionType: proposedState.transactionType ?? prev.transactionType,
+    sourceType: proposedState.sourceType !== undefined ? proposedState.sourceType : prev.sourceType,
+    customerPublicId: proposedState.customerPublicId ?? prev.customer?.publicId,
+    partnerPublicId: proposedState.partnerPublicId ?? prev.partner?.publicId,
+    categoryPublicId: proposedState.categoryPublicId ?? prev.category?.publicId,
+  };
+  if (effective.transactionType === TRANSACTION_TYPES.OUTTAKE) {
+    if (!effective.categoryPublicId) {
+      throw new ValidationError('Outtake requires an expense category');
+    }
+    if (effective.sourceType) {
+      throw new ValidationError('Outtake must not have a source type');
+    }
+    return;
+  }
+  if (effective.sourceType === SOURCE_TYPES.CUSTOMER) {
+    if (!effective.customerPublicId) throw new ValidationError('Customer intake requires a customer');
+  } else if (
+    effective.sourceType === SOURCE_TYPES.PARTNER_CAPITAL ||
+    effective.sourceType === SOURCE_TYPES.PARTNER_LOAN
+  ) {
+    if (!effective.partnerPublicId) throw new ValidationError('Partner inflow requires a partner');
+  } else {
+    throw new ValidationError('Intake requires a valid source type');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -328,11 +520,28 @@ export async function submitChange({ entityType, entityId, operation, proposedSt
 
   // Destructive-transaction auth secret: accepted by validation above, then
   // stripped here so it can never reach change-request persistence, dispatch,
-  // or audit. Controllers verify it via verifyAdminPassword before calling.
+  // or audit. Controllers verify it via password re-entry before calling.
   let sanitizedState = proposedState;
   if (sanitizedState && typeof sanitizedState === 'object' && 'adminPassword' in sanitizedState) {
     sanitizedState = { ...sanitizedState };
     delete sanitizedState.adminPassword;
+  }
+
+  // Universal partner governance: every business-data mutation from a partner
+  // becomes a change request. Non-partner, non-developer callers cannot pass
+  // the pool check below even if they reach this path.
+  if (PARTNER_GOVERNED_ENTITIES.has(entityType)) {
+    // Owner bypass: the developer acts directly (fully audited) and never
+    // goes through partner approval. Role comes from server-side auth context.
+    if (ctx.role === 'developer') {
+      const applied = await applyDirect(entityType, entityId, operation, sanitizedState, ctx);
+      return {
+        changeRequest: null,
+        entity: applied?.entity ?? applied ?? null,
+        meta: applied?.meta ?? null,
+      };
+    }
+    return submitPartnerGovernedChange({ entityType, entityId, operation, proposedState: sanitizedState, ctx });
   }
 
   // Only SENSITIVE user operations (creating/promoting/demoting/deactivating/
@@ -344,6 +553,11 @@ export async function submitChange({ entityType, entityId, operation, proposedSt
     const row = await findUserByPublicId(entityId);
     if (!row) throw new NotFoundError('User not found');
     targetUser = { id: row.id, role: row.role, isActive: row.is_active };
+    // Developer accounts are owner-managed only: fail fast before any change
+    // request can be created for or from a developer identity via the API.
+    if (row.role === 'developer' || sanitizedState?.role === 'developer') {
+      throw new ValidationError('Developer accounts can only be managed by the system owner');
+    }
     // Self-guard: an admin can never deactivate or delete their own account
     // directly. Reject here so no dangling PENDING ticket is left; governed
     // self-deactivation/delete can only ever complete via another admin's
@@ -461,6 +675,26 @@ async function applyDirect(entityType, entityId, operation, proposedState, ctx) 
   // inside the transaction — this post-commit call is the authoritative one.
   if (entityType === 'app_setting' && entityId === 'opening_balance') invalidateFinancialCachePublic();
   return applied;
+}
+
+// ---------------------------------------------------------------------------
+// Per-viewer decision state (authoritative UI authorization state)
+// ---------------------------------------------------------------------------
+// The approvals UI must never infer eligibility from role alone: a partner
+// may decide a request ONLY when they are a member of its frozen
+// requiredApprovers snapshot and have not decided yet. This helper mirrors
+// exactly what loadPending() enforces on approve/reject, so the buttons the
+// UI renders can never disagree with what the server will accept. In
+// particular the requester is never a member of their own snapshot and
+// therefore always receives viewerCanDecide: false.
+export function viewerDecisionState(request, viewerId) {
+  const id = String(viewerId ?? '');
+  const inSnapshot = (request.requiredApprovers || []).map(String).includes(id);
+  const mine = (request.approvals || []).find((a) => String(a.adminUserId) === id);
+  return {
+    viewerCanDecide: request.status === 'PENDING' && inSnapshot && !mine,
+    viewerDecision: mine ? mine.status : null,
+  };
 }
 
 async function loadPending(publicId, adminUser) {

@@ -25,8 +25,8 @@ router.use(authenticate);
 router.get('/active', listActiveCategories);
 router.get('/', validate(listCategoryQuerySchema, 'query'), listCategories);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getCategoryById);
-router.post('/', authorize(ROLES.ADMIN), validate(createCategorySchema), createCategory);
-router.put('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), validate(updateCategorySchema), updateCategory);
-router.delete('/:id', authorize(ROLES.ADMIN), validate(publicIdParamSchema, 'params'), deleteCategory);
+router.post('/', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(createCategorySchema), createCategory);
+router.put('/:id', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), validate(updateCategorySchema), updateCategory);
+router.delete('/:id', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(publicIdParamSchema, 'params'), deleteCategory);
 
 export default router;

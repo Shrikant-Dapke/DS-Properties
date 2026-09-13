@@ -1,27 +1,37 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { getAdminToken, authHeader, login, setupViewer } from '../helpers/api.js';
+import {
+  getAdminToken,
+  authHeader,
+  setupPartnerQuorum,
+  proposeAndApprove,
+  proposeAsPartner,
+  approveAsPartners,
+} from '../helpers/api.js';
 
-describe('Domains: customers, partners, categories', () => {
+describe('Domains: customers, partners, categories (via partner governance)', () => {
   let adminToken;
-  let viewer;
+  let Q;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
-    viewer = await setupViewer();
+    Q = await setupPartnerQuorum(adminToken, 2, 'dom');
   });
 
   describe('Customers', () => {
     let customerPublicId;
 
-    it('creates a customer', async () => {
-      const res = await request(app)
-        .post('/api/v1/customers')
-        .set(authHeader(adminToken))
-        .send({ name: 'Ramesh Patil', phone: '9876543210' });
-      expect(res.status).toBe(201);
-      expect(res.body.data.entity.publicId).toBeTruthy();
-      customerPublicId = res.body.data.entity.publicId;
+    it('partner proposal creates a customer after unanimous approval', async () => {
+      const proposal = await proposeAsPartner(Q, 'post', '/api/v1/customers', {
+        name: 'Ramesh Patil',
+        phone: '9876543210',
+      });
+      expect(proposal.status).toBe(201);
+      expect(proposal.body.data.changeRequest.status).toBe('PENDING');
+      const approval = await approveAsPartners(proposal.body.data.changeRequest.publicId, Q.slice(1));
+      expect(approval.body.data.changeRequest.status).toBe('APPROVED');
+      expect(approval.body.data.entity.publicId).toBeTruthy();
+      customerPublicId = approval.body.data.entity.publicId;
     });
 
     it('lists customers with search', async () => {
@@ -42,36 +52,31 @@ describe('Domains: customers, partners, categories', () => {
       expect(res.body.data.publicId).toBe(customerPublicId);
     });
 
-    it('updates a customer (admin only)', async () => {
+    it('updates a customer after unanimous approval', async () => {
+      const { entity } = await proposeAndApprove(Q, 'put', `/api/v1/customers/${customerPublicId}`, {
+        phone: '9123456789',
+      });
+      expect(entity.phone).toBe('9123456789');
+    });
+
+    it('forbids admin from updating a customer', async () => {
       const res = await request(app)
         .put(`/api/v1/customers/${customerPublicId}`)
         .set(authHeader(adminToken))
-        .send({ phone: '9123456789' });
-      expect(res.status).toBe(200);
-      expect(res.body.data.entity.phone).toBe('9123456789');
-    });
-
-    it('forbids read_only from updating a customer', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
-      const res = await request(app)
-        .put(`/api/v1/customers/${customerPublicId}`)
-        .set(authHeader(vToken))
         .send({ phone: '0000000000' });
       expect(res.status).toBe(403);
     });
 
-    it('forbids viewer from creating a customer', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
+    it('forbids partners from managing users (separation of duties)', async () => {
       const res = await request(app)
-        .post('/api/v1/customers')
-        .set(authHeader(vToken))
-        .send({ name: 'Nope' });
+        .post('/api/v1/users')
+        .set(authHeader(Q[0].accessToken))
+        .send({ username: 'Nope', password: 'Test@1234', fullName: 'N', role: 'partner' });
       expect(res.status).toBe(403);
     });
 
-    it('viewer can list customers (read-only)', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
-      const res = await request(app).get('/api/v1/customers').set(authHeader(vToken));
+    it('partners can list customers (read-only)', async () => {
+      const res = await request(app).get('/api/v1/customers').set(authHeader(Q[1].accessToken));
       expect(res.status).toBe(200);
     });
 
@@ -86,13 +91,22 @@ describe('Domains: customers, partners, categories', () => {
   describe('Partners', () => {
     let partnerPublicId;
 
-    it('creates a partner', async () => {
+    it('admin creates a partner record directly (membership management)', async () => {
       const res = await request(app)
         .post('/api/v1/partners')
         .set(authHeader(adminToken))
         .send({ name: 'Suresh Partner', notes: 'Capital partner' });
       expect(res.status).toBe(201);
+      expect(res.body.data.changeRequest).toBeNull();
       partnerPublicId = res.body.data.entity.publicId;
+    });
+
+    it('partner cannot create partner records (membership is admin-managed)', async () => {
+      const res = await request(app)
+        .post('/api/v1/partners')
+        .set(authHeader(Q[0].accessToken))
+        .send({ name: 'SelfAdded' });
+      expect(res.status).toBe(403);
     });
 
     it('lists partners with active filter', async () => {
@@ -104,7 +118,7 @@ describe('Domains: customers, partners, categories', () => {
       expect(res.body.data.rows.some((p) => p.publicId === partnerPublicId)).toBe(true);
     });
 
-    it('deactivates a partner', async () => {
+    it('admin deactivates a partner record directly', async () => {
       const res = await request(app)
         .put(`/api/v1/partners/${partnerPublicId}`)
         .set(authHeader(adminToken))
@@ -113,19 +127,21 @@ describe('Domains: customers, partners, categories', () => {
       expect(res.body.data.entity.isActive).toBe(false);
     });
 
-    it('refuses partner inflow for an inactive partner at creation', async () => {
-      const res = await request(app)
-        .post('/api/v1/transactions')
-        .set(authHeader(adminToken))
-        .send({
-          transactionType: 'intake',
-          sourceType: 'partner_capital',
-          partnerPublicId,
-          amount: 5000,
-          paymentMode: 'cash',
-          transactionDate: '2026-06-01',
-        });
-      expect(res.status).toBe(400);
+    it('refuses partner inflow for an inactive partner (fails fast, nothing proposed)', async () => {
+      const proposal = await proposeAsPartner(Q, 'post', '/api/v1/transactions', {
+        transactionType: 'intake',
+        sourceType: 'partner_capital',
+        partnerPublicId,
+        amount: 5000,
+        paymentMode: 'cash',
+        transactionDate: '2026-06-01',
+      });
+      expect(proposal.status).toBe(400);
+      // No change request was created for the invalid inflow.
+      const open = await request(app).get('/api/v1/change-requests').query({ status: 'PENDING', limit: 100 }).set(authHeader(adminToken));
+      expect(open.body.data.rows.some(
+        (r) => r.entityType === 'transaction' && r.operation === 'create' && r.proposedState?.partnerPublicId === partnerPublicId,
+      )).toBe(false);
     });
   });
 
@@ -136,35 +152,45 @@ describe('Domains: customers, partners, categories', () => {
       expect(res.body.data.length).toBeGreaterThanOrEqual(7);
     });
 
-    it('creates a category (admin only)', async () => {
+    it('partner proposal creates a category after unanimous approval', async () => {
+      const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/categories', {
+        name: 'Survey Work',
+        slug: 'survey-work',
+      });
+      expect(entity.slug).toBe('survey-work');
+    });
+
+    it('duplicate slug resolves CANCELLED instead of recording', async () => {
+      const proposal = await proposeAsPartner(Q, 'post', '/api/v1/categories', {
+        name: 'Survey Work 2',
+        slug: 'survey-work',
+      });
+      expect(proposal.status).toBe(201);
+      const approval = await approveAsPartners(proposal.body.data.changeRequest.publicId, Q.slice(1));
+      expect(approval.status).toBe(200);
+      expect(approval.body.data.changeRequest.status).toBe('CANCELLED');
+      expect(approval.body.data.changeRequest.resolutionReason).toBe('SLUG_TAKEN');
+      expect(approval.body.data.entity).toBeNull();
+    });
+
+    it('forbids admin from creating a category', async () => {
       const res = await request(app)
         .post('/api/v1/categories')
         .set(authHeader(adminToken))
-        .send({ name: 'Survey Work', slug: 'survey-work' });
-      expect(res.status).toBe(201);
-      expect(res.body.data.entity.slug).toBe('survey-work');
-    });
-
-    it('rejects duplicate slug', async () => {
-      const res = await request(app)
-        .post('/api/v1/categories')
-        .set(authHeader(adminToken))
-        .send({ name: 'Survey Work 2', slug: 'survey-work' });
-      expect(res.status).toBe(409);
-    });
-
-    it('forbids read_only from creating a category', async () => {
-      const vToken = (await login(viewer.username, viewer.password)).accessToken;
-      const res = await request(app)
-        .post('/api/v1/categories')
-        .set(authHeader(vToken))
-        .send({ name: 'Hacked', slug: 'hacked' });
+        .send({ name: 'AdminCat', slug: 'admin-cat' });
       expect(res.status).toBe(403);
+    });
+
+    it('partner category creation always becomes PENDING, never direct', async () => {
+      const res = await proposeAsPartner(Q, 'post', '/api/v1/categories', { name: 'Direct?', slug: 'direct-check' });
+      expect(res.status).toBe(201);
+      expect(res.body.data.changeRequest.status).toBe('PENDING');
+      expect(res.body.data.entity).toBeNull();
     });
   });
 
   describe('Audit trail', () => {
-    it('records customer creation in the audit log', async () => {
+    it('records governed customer creation in the audit log', async () => {
       const res = await request(app)
         .get('/api/v1/audit')
         .set(authHeader(adminToken))

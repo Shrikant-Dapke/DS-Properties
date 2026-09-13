@@ -17,8 +17,10 @@ import { updateSettingSchema } from './reportValidators.js';
 
 const reasonSchema = Joi.object({
   reason: Joi.string().trim().max(1000).allow('').allow(null).optional(),
-  // Destructive transaction auth: accepted here so the second-layer check
-  // does not reject it; governanceService strips it before persistence/audit.
+  // Destructive-operation re-auth secret: accepted here so the second-layer
+  // check does not reject it; governanceService strips it before persistence/
+  // audit. It always carries the requesting user's OWN password (the field
+  // keeps its historical name for API compatibility).
   adminPassword: Joi.string().min(8).max(128).optional(),
 }).unknown(true);
 

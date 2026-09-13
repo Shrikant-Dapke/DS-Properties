@@ -15,6 +15,10 @@ vi.mock('../hooks/useToast.js', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 
+vi.mock('../hooks/useAuth.js', () => ({
+  useAuth: () => ({ user: { username: 'partner1', role: 'partner' } }),
+}));
+
 import { customerApi, partnerApi, transactionApi } from '../api/endpoints.js';
 
 const CUSTOMERS = [{ publicId: 'cust-1', name: 'Anil', phone: '9876543210' }];

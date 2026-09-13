@@ -14,7 +14,7 @@ import { Modal } from '../components/common/Modal.jsx';
 import { Badge } from '../components/common/Badge.jsx';
 import { DateRangeFilter } from '../components/common/DateRangeFilter.jsx';
 import { formatINR, formatDate, formatDateTime, titleCase } from '../utils/formatters.js';
-import { canWrite, isAdmin } from '../contexts/authContextDef.js';
+import { canOperate } from '../contexts/authContextDef.js';
 import { SOURCE_LABELS, TRANSACTION_TYPES } from '../utils/constants.js';
 import { DATE_MODES } from '../utils/dateRange.js';
 
@@ -94,12 +94,16 @@ export default function Transactions() {
       // Echo the concurrency tag so stale deletes/reverses fail with
       // STALE_CONFLICT (409) instead of silently overwriting newer data.
       const versionTag = selected.versionTag ?? selected.updatedAt ?? undefined;
+      // Destructive business actions always become change requests: the toast
+      // reports the proposal, and approval happens on the Approvals page.
+      const pendingToast = (result, directMessage) =>
+        toast.success(result?.changeRequest?.status === 'PENDING' ? 'Submitted for partner approval' : directMessage);
       if (action === 'delete') {
-        await transactionApi.remove(selected.publicId, { adminPassword, ...(versionTag ? { versionTag } : {}) });
-        toast.success('Transaction deleted');
+        const result = await transactionApi.remove(selected.publicId, { adminPassword, ...(versionTag ? { versionTag } : {}) });
+        pendingToast(result, 'Transaction deleted');
       } else if (action === 'reverse') {
-        await transactionApi.reverse(selected.publicId, { adminPassword, reason: 'Reversed from web UI', ...(versionTag ? { versionTag } : {}) });
-        toast.success('Transaction reversed');
+        const result = await transactionApi.reverse(selected.publicId, { adminPassword, reason: 'Reversed from web UI', ...(versionTag ? { versionTag } : {}) });
+        pendingToast(result, 'Transaction reversed');
       }
       setAction(null);
       setAdminPassword('');
@@ -163,7 +167,7 @@ export default function Transactions() {
       <PageHeader
         title="Transactions"
         subtitle="All intakes and outtakes"
-        actions={canWrite(user) && <Button onClick={() => navigate('/entries/new')}>+ Add Entry</Button>}
+        actions={canOperate(user) && <Button onClick={() => navigate('/entries/new')}>+ Add Entry</Button>}
       />
 
       <Card className="mb-4" pad={false}>
@@ -214,12 +218,12 @@ export default function Transactions() {
               <Button variant="secondary" onClick={() => setSelected(null)}>
                 Close
               </Button>
-              {canWrite(user) && !selected.isReversal && !selected.reversedAt && (
+              {canOperate(user) && !selected.isReversal && !selected.reversedAt && (
                 <Button variant="secondary" onClick={() => navigate(`/entries/new?edit=${selected.publicId}`)}>
                   Edit
                 </Button>
               )}
-              {isAdmin(user) && !selected.isReversal && !selected.reversedAt && (
+              {canOperate(user) && !selected.isReversal && !selected.reversedAt && (
                 <>
                   <Button variant="secondary" onClick={() => setAction('reverse')}>
                     Reverse
@@ -331,11 +335,11 @@ export default function Transactions() {
         >
           <p className="mb-4 text-sm text-slate-600">
             {action === 'delete'
-              ? 'Deleting removes this entry from all totals. This action is audited and cannot be undone.'
-              : 'Reversing marks the original entry as reversed and creates an offsetting record. This is audited.'}
+              ? 'Deleting removes this entry from all totals. This submits a change request for unanimous partner approval and is audited.'
+              : 'Reversing marks the original entry as reversed and creates an offsetting record. This submits a change request for unanimous partner approval and is audited.'}
           </p>
           <Input
-            label="Admin password (re-entry required)"
+            label="Your password (re-entry required)"
             type="password"
             value={adminPassword}
             onChange={(e) => setAdminPassword(e.target.value)}

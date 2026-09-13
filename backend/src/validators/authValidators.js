@@ -1,5 +1,6 @@
 import Joi from 'joi';
-import { ROLE_LIST } from '../config/constants.js';
+import { API_ASSIGNABLE_ROLES } from '../config/constants.js';
+import { publicIdSchema } from './common.js';
 
 export const loginSchema = Joi.object({
   username: Joi.string().trim().min(1).max(100).required(),
@@ -28,16 +29,21 @@ export const createUserSchema = Joi.object({
   fullName: Joi.string().trim().min(1).max(150).required(),
   email: Joi.string().email().max(200).allow('').allow(null).optional(),
   phone: Joi.string().trim().max(30).allow('').allow(null).optional(),
-  role: Joi.string().valid(...ROLE_LIST).required(),
+  role: Joi.string().valid(...API_ASSIGNABLE_ROLES).required(),
+  // Business-partner identity link (partner public id). The service layer
+  // enforces: required for role 'partner', forbidden for other roles.
+  partnerPublicId: publicIdSchema.allow(null).optional(),
 });
 
 export const updateUserSchema = Joi.object({
   fullName: Joi.string().trim().min(1).max(150).optional(),
   email: Joi.string().email().max(200).allow('').allow(null).optional(),
   phone: Joi.string().trim().max(30).allow('').allow(null).optional(),
-  role: Joi.string().valid(...ROLE_LIST).optional(),
+  role: Joi.string().valid(...API_ASSIGNABLE_ROLES).optional(),
   isActive: Joi.boolean().optional(),
   password: Joi.string().min(8).max(128).optional(),
+  // null/'' unlinks the partner identity; omitted leaves it unchanged.
+  partnerPublicId: publicIdSchema.allow(null, '').optional(),
 }).min(1);
 
 export const setUserActiveSchema = Joi.object({

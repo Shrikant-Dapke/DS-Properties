@@ -52,6 +52,15 @@ export function findPartnerByPublicId(publicId) {
   ).then((r) => r.rows[0] || null);
 }
 
+// Batch lookup for enriching user serializations with their linked partner
+// identity (public id + name). Internal ids only; callers map them.
+export function findPartnersByIds(ids) {
+  if (!ids || ids.length === 0) return Promise.resolve([]);
+  return query(`SELECT id, public_id, name FROM partners WHERE id = ANY($1::bigint[])`, [ids]).then(
+    (r) => r.rows,
+  );
+}
+
 export function createPartner({ name, phone, email, address, notes }) {
   return query(
     `INSERT INTO partners (name, phone, email, address, notes)

@@ -11,24 +11,24 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
-import { isAdmin } from '../../contexts/authContextDef.js';
+import { ROLES } from '../../utils/constants.js';
 
 const bottomItems = [
   { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
-  { to: '/entries/new', labelKey: 'nav.addEntry', icon: PlusCircle, writeOnly: true },
+  { to: '/entries/new', labelKey: 'nav.addEntry', icon: PlusCircle, roles: [ROLES.PARTNER, ROLES.DEVELOPER] },
   { to: '/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight },
   { to: '/customers', labelKey: 'nav.customers', icon: Users },
   { to: '/partners', labelKey: 'nav.partners', icon: Handshake },
   { to: '/reports', labelKey: 'nav.reports', icon: FileBarChart },
-  { to: '/settings', labelKey: 'nav.settings', icon: Settings, adminOnly: true },
-  { to: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, adminOnly: true },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings },
+  { to: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, roles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER] },
 ];
 
 export function BottomNav() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const visible = bottomItems.filter(
-    (item) => (!item.adminOnly || isAdmin(user)) && (!item.writeOnly || isAdmin(user)),
+    (item) => !item.roles || item.roles.includes(user?.role),
   );
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white lg:hidden" aria-label="Mobile nav">

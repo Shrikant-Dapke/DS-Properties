@@ -3,30 +3,29 @@ import app from '../../src/app.js';
 import { pool } from '../setup.js';
 import { query, withTransaction } from '../../src/config/database.js';
 import { createTransaction, reverseTransaction as modelReverse } from '../../src/models/transactionModel.js';
-import { getAdminToken, authHeader } from '../helpers/api.js';
-import { TEST_ADMIN_PASSWORD } from '../helpers/testCredentials.js';
+import { getAdminToken, authHeader, setupPartnerQuorum, proposeAndApprove, proposeAsPartner } from '../helpers/api.js';
+
+const PARTNER_PW = 'Test@1234';
 
 function uniq(prefix) {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
 
-describe('P1 dispatch/atomicity + query correctness', () => {
+describe('P1 dispatch/atomicity + query correctness (via partner governance)', () => {
   let adminToken;
   let adminId;
+  let Q;
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
+    Q = await setupPartnerQuorum(adminToken, 2, 'atom');
     const { rows } = await pool.query(`SELECT id FROM users WHERE username = 'admin'`);
     adminId = rows[0].id;
   });
 
   async function createCustomer(name) {
-    const res = await request(app)
-      .post('/api/v1/customers')
-      .set(authHeader(adminToken))
-      .send({ name });
-    expect(res.status).toBe(201);
-    return res.body.data.entity.publicId;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/customers', { name });
+    return entity.publicId;
   }
 
   async function createPartner(name) {
@@ -49,12 +48,26 @@ describe('P1 dispatch/atomicity + query correctness', () => {
     if (customerPublicId) body.customerPublicId = customerPublicId;
     if (partnerPublicId) body.partnerPublicId = partnerPublicId;
     if (referenceNumber) body.referenceNumber = referenceNumber;
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send(body);
-    expect(res.status).toBe(201);
-    return res.body.data.entity;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/transactions', body);
+    return entity;
+  }
+
+  async function deleteTx(publicId, extra = {}) {
+    const { changeRequest } = await proposeAndApprove(Q, 'delete', `/api/v1/transactions/${publicId}`, {
+      adminPassword: PARTNER_PW,
+      reason: 'p1 check',
+      ...extra,
+    });
+    return changeRequest;
+  }
+
+  async function reverseTx(publicId, extra = {}) {
+    const { entity, changeRequest } = await proposeAndApprove(Q, 'post', `/api/v1/transactions/${publicId}/reverse`, {
+      adminPassword: PARTNER_PW,
+      reason: 'p1 check',
+      ...extra,
+    });
+    return { entity, changeRequest };
   }
 
   async function internalIds(customerPublicId) {
@@ -108,11 +121,8 @@ describe('P1 dispatch/atomicity + query correctness', () => {
       expect(dailyBefore.status).toBe(200);
       expect(dailyBefore.body.data.transactions.some((t) => t.publicId === tx.publicId)).toBe(true);
 
-      const del = await request(app)
-        .delete(`/api/v1/transactions/${tx.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'p1 exclusion check' });
-      expect(del.status).toBe(200);
+      const cr = await deleteTx(tx.publicId, { reason: 'p1 exclusion check' });
+      expect(cr.status).toBe('APPROVED');
 
       const search = await request(app)
         .get('/api/v1/transactions')
@@ -156,12 +166,9 @@ describe('P1 dispatch/atomicity + query correctness', () => {
       const ref = uniq('REV-REF');
       const tx = await createIntake({ customerPublicId, amount: 6000, date, referenceNumber: ref });
 
-      const rev = await request(app)
-        .post(`/api/v1/transactions/${tx.publicId}/reverse`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'p1 reversal check' });
-      expect(rev.status).toBe(200);
-      const reversalPublicId = rev.body.data.entity?.reversalPublicId ?? rev.body.data.reversalPublicId;
+      const { entity, changeRequest } = await reverseTx(tx.publicId, { reason: 'p1 reversal check' });
+      expect(changeRequest.status).toBe('APPROVED');
+      const reversalPublicId = entity?.reversalPublicId;
       expect(reversalPublicId).toBeTruthy();
 
       const daily = await request(app).get('/api/v1/reports/daily').query({ date }).set(authHeader(adminToken));
@@ -204,16 +211,8 @@ describe('P1 dispatch/atomicity + query correctness', () => {
       const doomed = await createIntake({ customerPublicId, amount: 200, date, referenceNumber: uniq('MIX-DEL') });
       const doomedRev = await createIntake({ customerPublicId, amount: 300, date, referenceNumber: uniq('MIX-REV') });
 
-      await request(app)
-        .delete(`/api/v1/transactions/${doomed.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'mix' })
-        .expect(200);
-      await request(app)
-        .post(`/api/v1/transactions/${doomedRev.publicId}/reverse`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'mix' })
-        .expect(200);
+      await deleteTx(doomed.publicId, { reason: 'mix' });
+      await reverseTx(doomedRev.publicId, { reason: 'mix' });
 
       const daily = await request(app).get('/api/v1/reports/daily').query({ date }).set(authHeader(adminToken));
       expect(daily.body.data.transactions.map((t) => t.publicId)).toEqual([active.publicId]);
@@ -321,47 +320,51 @@ describe('P1 dispatch/atomicity + query correctness', () => {
     });
   });
 
-  describe('version/concurrency for destructive ops', () => {
-    it('DELETE without a version tag still succeeds (direct path unbroken)', async () => {
+  describe('version/concurrency for governed destructive ops', () => {
+    it('DELETE without a version tag is accepted as a governed proposal', async () => {
       const customerPublicId = await createCustomer(uniq('NoTagCust'));
       const tx = await createIntake({ customerPublicId, amount: 111, date: '2026-09-25' });
-      const res = await request(app)
-        .delete(`/api/v1/transactions/${tx.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'no tag' });
+      const res = await proposeAsPartner(Q, 'delete', `/api/v1/transactions/${tx.publicId}`, {
+        adminPassword: PARTNER_PW,
+        reason: 'no tag',
+      });
       expect(res.status).toBe(200);
+      expect(res.body.data.changeRequest.status).toBe('PENDING');
     });
 
     it('DELETE with a stale version tag is rejected with STALE_CONFLICT', async () => {
       const customerPublicId = await createCustomer(uniq('StaleDelCust'));
       const tx = await createIntake({ customerPublicId, amount: 222, date: '2026-09-25' });
-      const res = await request(app)
-        .delete(`/api/v1/transactions/${tx.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'stale', versionTag: '1970-01-01T00:00:00.000Z' });
+      const res = await proposeAsPartner(Q, 'delete', `/api/v1/transactions/${tx.publicId}`, {
+        adminPassword: PARTNER_PW,
+        reason: 'stale',
+        versionTag: '1970-01-01T00:00:00.000Z',
+      });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('STALE_CONFLICT');
     });
 
-    it('DELETE with the fresh version tag succeeds', async () => {
+    it('DELETE with the fresh version tag is approved and applied', async () => {
       const customerPublicId = await createCustomer(uniq('FreshDelCust'));
       const tx = await createIntake({ customerPublicId, amount: 333, date: '2026-09-25' });
       const row = await pool.query('SELECT updated_at FROM transactions WHERE public_id = $1', [tx.publicId]);
       const fresh = row.rows[0].updated_at instanceof Date ? row.rows[0].updated_at.toISOString() : String(row.rows[0].updated_at);
-      const res = await request(app)
-        .delete(`/api/v1/transactions/${tx.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'fresh', versionTag: fresh });
-      expect(res.status).toBe(200);
+      const { changeRequest } = await proposeAndApprove(Q, 'delete', `/api/v1/transactions/${tx.publicId}`, {
+        adminPassword: PARTNER_PW,
+        reason: 'fresh',
+        versionTag: fresh,
+      });
+      expect(changeRequest.status).toBe('APPROVED');
     });
 
     it('reverse with a stale version tag is rejected with STALE_CONFLICT', async () => {
       const customerPublicId = await createCustomer(uniq('StaleRevCust'));
       const tx = await createIntake({ customerPublicId, amount: 444, date: '2026-09-26' });
-      const res = await request(app)
-        .post(`/api/v1/transactions/${tx.publicId}/reverse`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'stale', versionTag: '1970-01-01T00:00:00.000Z' });
+      const res = await proposeAsPartner(Q, 'post', `/api/v1/transactions/${tx.publicId}/reverse`, {
+        adminPassword: PARTNER_PW,
+        reason: 'stale',
+        versionTag: '1970-01-01T00:00:00.000Z',
+      });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('STALE_CONFLICT');
     });

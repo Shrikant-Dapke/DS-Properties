@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { config } from '../config/environment.js';
-import { LOCKOUT, AUDIT_ACTIONS } from '../config/constants.js';
+import { LOCKOUT, AUDIT_ACTIONS, ROLE_LIST } from '../config/constants.js';
 import {
   findUserByUsername,
   findUserById,
@@ -128,6 +128,20 @@ export async function login({ username, password }, ctx) {
       action: AUDIT_ACTIONS.LOGIN_FAILED,
       domain: 'auth',
       newValues: { reason: 'invalid_credentials' },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    throw new UnauthorizedError('Invalid username or password');
+  }
+
+  // Retired roles (e.g. read_only) can never authenticate, even if a legacy
+  // row is somehow reactivated outside the API.
+  if (!ROLE_LIST.includes(user.role)) {
+    await logAudit({
+      userId: user.id,
+      action: AUDIT_ACTIONS.LOGIN_FAILED,
+      domain: 'auth',
+      newValues: { reason: 'retired_role' },
       ip: ctx.ip,
       userAgent: ctx.userAgent,
     });
@@ -281,6 +295,18 @@ export async function verifyAdminPassword(userId, password) {
   if (!user || user.role !== 'admin') throw new UnauthorizedError('Admin verification failed');
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) throw new UnauthorizedError('Admin password verification failed');
+  return true;
+}
+
+// Re-authentication for sensitive business operations (e.g. partner-proposed
+// delete/reverse): verifies the requesting user's OWN password regardless of
+// role. The secret is verified at the controller boundary and stripped before
+// governance persistence, so it never reaches change requests or audit logs.
+export async function verifyUserPassword(userId, password) {
+  const user = await findUserById(userId);
+  if (!user || !user.is_active || user.deleted_at) throw new UnauthorizedError('User verification failed');
+  const ok = await bcrypt.compare(password, user.password_hash);
+  if (!ok) throw new UnauthorizedError('Password verification failed');
   return true;
 }
 

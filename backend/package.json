@@ -18,6 +18,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "db:reset": "node scripts/dbReset.js",
+    "provision-developer": "node scripts/provision-developer.js",
     "smoke": "node scripts/smoke.js"
   },
   "dependencies": {

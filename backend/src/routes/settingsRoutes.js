@@ -10,7 +10,9 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize(ROLES.ADMIN, ROLES.READ_ONLY), getSettings);
-router.put('/:key', authorize(ROLES.ADMIN), validate(updateSettingSchema), updateSettings);
+router.get('/', authorize(ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER), getSettings);
+// Financial settings shape business-data aggregates: partners propose via
+// governance, the developer applies directly. Admins cannot change settings.
+router.put('/:key', authorize(ROLES.PARTNER, ROLES.DEVELOPER), validate(updateSettingSchema), updateSettings);
 
 export default router;

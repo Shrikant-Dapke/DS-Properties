@@ -64,19 +64,32 @@ Change it immediately after first login — never use the default in production.
 
 ## Key behaviors
 
-- **Reversals**: an entry can be reversed (admin + password re-entry). The original is
-  marked `reversed_at` and an offsetting `is_reversal` record is created. Aggregations
+- **Reversals**: an entry can be proposed for reversal by a partner (own-password
+  re-entry). The original is marked `reversed_at` and an offsetting `is_reversal`
+  record is created once all other active partners approve. Aggregations
   exclude deleted, reversed, and reversal rows, so balances never double-count.
 - **Duplicate detection**: entries matching an amount + party + type within 15 minutes
   are flagged with a warning, never rejected.
-- **Roles**: `admin` (full access, including user management, destructive actions,
-  settings, governance approvals, and audit) and `read_only` (can view and list,
-  cannot create, edit, delete, reverse, approve, or export-sensitive admin data).
-  Creating, promoting, demoting, deactivating, deleting, or resetting the password
-  of an `admin` requires multi-admin approval (governance); the same actions on a
-  `read_only` user apply immediately.
-- **Destructive actions**: deleting or reversing an entry requires admin role plus
-  admin-password re-entry, and is fully audited.
+- **Roles — exactly three account types**: `developer` (owner/maintenance:
+  full access, direct apply, provisioned only by the owner outside the API),
+  `partner` (business operator: proposes creates/edits/deletes/reversals,
+  approves other partners' proposals), `admin` (supervision: views business
+  data/reports/audit, manages users and partner membership, cannot mutate
+  business data). There is no fourth role.
+- **Partner governance**: every business-data mutation (transactions, customers,
+  categories, financial settings) becomes a change request requiring unanimous
+  approval from ALL OTHER active partners. The requester can never approve
+  their own request; approver membership is frozen server-side at creation.
+  With no other active partners, proposals fail closed with `409
+  NO_PARTNER_QUORUM` — never silently auto-approved.
+- **Admin governance**: creating, promoting, demoting, deactivating, deleting,
+  or resetting the password of an `admin` requires multi-admin approval; the
+  same actions on `partner` users apply immediately (audited).
+  Partner business-record membership is also admin-managed. Developer
+  accounts cannot be created, modified, or removed through the API at all.
+- **Destructive actions**: deleting or reversing an entry requires the
+  requesting partner's own password re-entry plus unanimous partner approval,
+  and is fully audited. No database-wide destruction endpoint exists.
 - **Lockout**: 5 consecutive failed logins locks the account for ~15 minutes.
 - **Token security**: 15-minute access tokens, rotating refresh tokens (hashed at rest,
   stored with a family chain for reuse detection).
@@ -94,7 +107,7 @@ Change it immediately after first login — never use the default in production.
 
 ```
 backend/
-  migrations/         SQL migrations (001..010, incl. roles/governance)
+  migrations/         SQL migrations (001..012, incl. roles/governance/partner link)
   seeds/              Seed scripts (categories, admin, settings)
   scripts/            migrate / seed / db-reset / smoke runners
   src/
@@ -127,16 +140,19 @@ require `Authorization: Bearer <accessToken>`.
 - `customers` — CRUD + ledger (`GET /customers/:id/ledger`)
 - `partners` — CRUD + ledger
 - `categories` — CRUD + `GET /categories/active`
-- `transactions` — CRUD + `POST /transactions/:id/reverse` (admin role + admin
-  password required for delete/reverse; `PATCH /:id` edits an entry, admin only;
-  update/delete/reverse accept an optional `versionTag` for optimistic concurrency —
-  a stale tag returns `409 STALE_CONFLICT`; list accepts optional `?from&to`)
+- `transactions` — CRUD + `POST /transactions/:id/reverse` (partner role only;
+  every mutation becomes a change request needing unanimous approval from all
+  other active partners; delete/reverse need the requester's own password
+  re-entry; `PATCH /:id` edits via the same flow; `versionTag` optimistic
+  concurrency — stale tag returns `409 STALE_CONFLICT`, empty quorum returns
+  `409 NO_PARTNER_QUORUM`; list accepts optional `?from&to`)
 - `dashboard` — summary + category breakdown (cached; both accept `?from&to`)
 - `reports` — daily (`?from&to`), monthly (`?year&month` or `?from&to`), category range
   (`?from&to`), partner financial (`/:id?from&to`, optional range)
-- `settings` — list/update app settings (admin)
-- `users` — CRUD, activate/deactivate, reset password (admin)
-- `audit` — paginated audit log (admin)
+- `settings` — list (admin/read_only/partner); update (partner-governed)
+- `users` — CRUD, activate/deactivate, reset password, partner-identity linking
+  (admin/developer; the developer role is never assignable via the API)
+- `audit` — paginated audit log (admin/partner/developer)
 
 Responses are `{ success: true, data }`; list endpoints return
 `data = { rows, pagination: { page, limit, total, totalPages, hasNext, hasPrev } }`.

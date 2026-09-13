@@ -14,7 +14,7 @@ import { Modal } from '../components/common/Modal.jsx';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.jsx';
 import { Badge } from '../components/common/Badge.jsx';
 import { formatINR, formatDate } from '../utils/formatters.js';
-import { canWrite, isAdmin } from '../contexts/authContextDef.js';
+import { isAdmin } from '../contexts/authContextDef.js';
 
 const empty = { name: '', phone: '', email: '', address: '', notes: '', isActive: true };
 
@@ -136,16 +136,14 @@ export default function Partners() {
       align: 'right',
       render: (r) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {canWrite(user) && (
+          {isAdmin(user) && (
             <>
               <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
-              {isAdmin(user) && (
-                <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
             </>
           )}
         </div>
@@ -158,7 +156,7 @@ export default function Partners() {
       <PageHeader
         title="Partners"
         subtitle="Capital contributors and loan sources"
-        actions={canWrite(user) && (
+        actions={isAdmin(user) && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Add partner
           </Button>

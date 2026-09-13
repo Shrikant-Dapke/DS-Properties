@@ -1,36 +1,35 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { getAdminToken, authHeader } from '../helpers/api.js';
-import { TEST_ADMIN_PASSWORD } from '../helpers/testCredentials.js';
+import { getAdminToken, authHeader, setupPartnerQuorum, proposeAndApprove } from '../helpers/api.js';
 import { cacheGet } from '../../src/utils/cache.js';
 
-describe('Date-range filtering', () => {
+const PARTNER_PW = 'Test@1234';
+
+describe('Date-range filtering (via partner governance)', () => {
   let adminToken;
+  let Q;
   const createdTransactions = [];
 
   beforeAll(async () => {
     adminToken = await getAdminToken();
+    Q = await setupPartnerQuorum(adminToken, 2, 'range');
   });
 
   // Tests in this suite share one schema reset (beforeAll), so each test
-  // soft-deletes the transactions it created — keeping financial aggregates
-  // isolated between tests (and invalidating the financial cache).
+  // deletes (via full propose -> approve) the transactions it created —
+  // keeping financial aggregates isolated between tests.
   afterEach(async () => {
     for (const publicId of createdTransactions.splice(0)) {
-      await request(app)
-        .delete(`/api/v1/transactions/${publicId}`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'dateRange test cleanup' });
+      await proposeAndApprove(Q, 'delete', `/api/v1/transactions/${publicId}`, {
+        adminPassword: PARTNER_PW,
+        reason: 'dateRange test cleanup',
+      });
     }
   });
 
   async function createCustomer(name) {
-    const res = await request(app)
-      .post('/api/v1/customers')
-      .set(authHeader(adminToken))
-      .send({ name });
-    expect(res.status).toBe(201);
-    return res.body.data.entity.publicId;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/customers', { name });
+    return entity.publicId;
   }
 
   async function createPartner(name) {
@@ -51,30 +50,35 @@ describe('Date-range filtering', () => {
     const body = { transactionType: 'intake', sourceType, amount, paymentMode: 'cash', transactionDate: date };
     if (customerId) body.customerPublicId = customerId;
     if (partnerId) body.partnerPublicId = partnerId;
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send(body);
-    expect(res.status).toBe(201);
-    createdTransactions.push(res.body.data.entity.publicId);
-    return res.body.data.entity;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/transactions', body);
+    createdTransactions.push(entity.publicId);
+    return entity;
   }
 
   async function outtake({ categoryId, amount, date }) {
-    const res = await request(app)
-      .post('/api/v1/transactions')
-      .set(authHeader(adminToken))
-      .send({
-        transactionType: 'outtake',
-        amount,
-        paymentMode: 'bank_transfer',
-        transactionDate: date,
-        categoryPublicId: categoryId,
-        paidTo: 'Contractor',
-      });
-    expect(res.status).toBe(201);
-    createdTransactions.push(res.body.data.entity.publicId);
-    return res.body.data.entity;
+    const { entity } = await proposeAndApprove(Q, 'post', '/api/v1/transactions', {
+      transactionType: 'outtake',
+      amount,
+      paymentMode: 'bank_transfer',
+      transactionDate: date,
+      categoryPublicId: categoryId,
+      paidTo: 'Contractor',
+    });
+    createdTransactions.push(entity.publicId);
+    return entity;
+  }
+
+  async function patchTx(publicId, body) {
+    const { entity } = await proposeAndApprove(Q, 'patch', `/api/v1/transactions/${publicId}`, body);
+    return entity;
+  }
+
+  async function reverseTx(publicId, reason) {
+    const { changeRequest } = await proposeAndApprove(Q, 'post', `/api/v1/transactions/${publicId}/reverse`, {
+      adminPassword: PARTNER_PW,
+      reason,
+    });
+    return changeRequest;
   }
 
   describe('transactions list', () => {
@@ -300,7 +304,7 @@ describe('Date-range filtering', () => {
       expect(cacheGet(`financial:dashboard:${rangeB.from}:${rangeB.to}`)).toBeDefined();
     });
 
-    it('create, update and reverse still invalidate the affected aggregates', async () => {
+    it('governed create, update and reverse still invalidate the affected aggregates', async () => {
       const customer = await createCustomer('Invalidate Customer');
       const range = { from: '2026-06-01', to: '2026-06-30' };
 
@@ -323,10 +327,7 @@ describe('Date-range filtering', () => {
       expect(Number(afterCreate.body.data.period.intake)).toBe(12000);
 
       // Update the first tx -> cache dropped, total reflects the change.
-      await request(app)
-        .patch(`/api/v1/transactions/${created.publicId}`)
-        .set(authHeader(adminToken))
-        .send({ amount: 6000 });
+      await patchTx(created.publicId, { amount: 6000 });
       expect(cacheGet(key)).toBeUndefined();
       const afterUpdate = await request(app)
         .get('/api/v1/dashboard/summary')
@@ -335,10 +336,7 @@ describe('Date-range filtering', () => {
       expect(Number(afterUpdate.body.data.period.intake)).toBe(13000);
 
       // Reverse the first tx -> cache dropped, only the un-reversed tx counts.
-      await request(app)
-        .post(`/api/v1/transactions/${created.publicId}/reverse`)
-        .set(authHeader(adminToken))
-        .send({ adminPassword: TEST_ADMIN_PASSWORD, reason: 'range test' });
+      await reverseTx(created.publicId, 'range test');
       expect(cacheGet(key)).toBeUndefined();
       const afterReverse = await request(app)
         .get('/api/v1/dashboard/summary')

@@ -14,14 +14,16 @@ Reports), each with regression coverage; the full suite is green.
 
 | Area | Status |
 |---|---|
-| Database schema (9 migrations, triggers, CHECK constraints, partial indexes) | ✅ |
+| Database schema (12 migrations, triggers, CHECK constraints, partial indexes) | ✅ |
 | Seeds (7 expense categories, admin user, app settings) | ✅ |
 | Backend API (auth, customers, partners, categories, transactions, dashboard, reports, settings, users, audit) | ✅ |
 | Auth security (bcrypt, JWT 15 min, rotating refresh tokens, lockout, rate limits) | ✅ |
+| Partner governance (partner role + identity link, unanimous all-other-partners approval, frozen snapshots, 409 NO_PARTNER_QUORUM, admin read-only for business data) | ✅ |
+| Owner model (developer role, owner-only seed/CLI provisioning, direct apply, API-immune) | ✅ |
 | Financial integrity (reversals, soft deletes, duplicate warnings, exact numeric(14,2)) | ✅ |
-| Transaction editing (`PATCH /transactions/:id`, admin + operator, audit-logged) | ✅ |
+| Transaction editing (`PATCH /transactions/:id`, partner-proposed, audit-logged) | ✅ |
 | Audit trail on all meaningful actions | ✅ |
-| Automated tests (51 backend integration tests, 15 frontend tests [9 component + 6 auth-client integration], all passing) | ✅ |
+| Automated tests (158 backend integration tests, 44 frontend tests [22 dateRange + 7 DateRangeFilter + 9 AddEntry + 6 auth-client integration], all passing) | ✅ |
 | Frontend (login, dashboard w/ charts, add/edit entry, transactions, customers, partners, categories, reports, settings, users, audit, change password) | ✅ |
 | Report exports (PDF + Excel buttons on every report tab) | ✅ |
 | Date-range filtering (Daily / Weekly / Monthly / Yearly / Custom) across Dashboard, Transactions, Reports | ✅ |

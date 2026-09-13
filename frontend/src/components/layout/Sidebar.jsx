@@ -19,24 +19,23 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { useToast } from '../../hooks/useToast.js';
-import { ROLE_LABELS } from '../../utils/constants.js';
-import { isAdmin } from '../../contexts/authContextDef.js';
+import { ROLE_LABELS, ROLES } from '../../utils/constants.js';
 import { useLanguage } from '../../hooks/useLanguage.js';
 import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
 import { ChangePasswordModal } from './ChangePasswordModal.jsx';
 
 const navItems = [
   { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
-  { to: '/entries/new', labelKey: 'nav.addEntry', icon: PlusCircle, writeOnly: true },
+  { to: '/entries/new', labelKey: 'nav.addEntry', icon: PlusCircle, roles: [ROLES.PARTNER, ROLES.DEVELOPER] },
   { to: '/transactions', labelKey: 'nav.transactions', icon: ArrowLeftRight },
   { to: '/customers', labelKey: 'nav.customers', icon: Users },
   { to: '/partners', labelKey: 'nav.partners', icon: Handshake },
   { to: '/categories', labelKey: 'nav.categories', icon: Tags },
   { to: '/reports', labelKey: 'nav.reports', icon: FileBarChart },
-  { to: '/settings', labelKey: 'nav.settings', icon: Settings, adminOnly: true },
-  { to: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, adminOnly: true },
-  { to: '/users', labelKey: 'nav.users', icon: UserCog, adminOnly: true },
-  { to: '/audit', labelKey: 'nav.audit', icon: ScrollText, adminOnly: true },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings },
+  { to: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, roles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER] },
+  { to: '/users', labelKey: 'nav.users', icon: UserCog, roles: [ROLES.ADMIN, ROLES.DEVELOPER] },
+  { to: '/audit', labelKey: 'nav.audit', icon: ScrollText },
 ];
 
 export function Sidebar() {
@@ -48,7 +47,7 @@ export function Sidebar() {
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   const visible = navItems.filter(
-    (item) => (!item.adminOnly || isAdmin(user)) && (!item.writeOnly || isAdmin(user)),
+    (item) => !item.roles || item.roles.includes(user?.role),
   );
 
   const handleLogout = async () => {

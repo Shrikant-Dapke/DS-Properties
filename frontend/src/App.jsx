@@ -37,7 +37,7 @@ export default function App() {
             <Route
               path="entries/new"
               element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                <ProtectedRoute roles={[ROLES.PARTNER, ROLES.DEVELOPER]}>
                   <AddEntry />
                 </ProtectedRoute>
               }
@@ -49,18 +49,11 @@ export default function App() {
             <Route path="partners/:publicId" element={<PartnerDetail />} />
             <Route path="categories" element={<Categories />} />
             <Route path="reports" element={<Reports />} />
-            <Route
-              path="settings"
-              element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="settings" element={<Settings />} />
             <Route
               path="users"
               element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                <ProtectedRoute roles={[ROLES.ADMIN, ROLES.DEVELOPER]}>
                   <Users />
                 </ProtectedRoute>
               }
@@ -68,7 +61,7 @@ export default function App() {
             <Route
               path="audit"
               element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                <ProtectedRoute roles={[ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER]}>
                   <Audit />
                 </ProtectedRoute>
               }
@@ -76,7 +69,7 @@ export default function App() {
             <Route
               path="approvals"
               element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
+                <ProtectedRoute roles={[ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER]}>
                   <Approvals />
                 </ProtectedRoute>
               }

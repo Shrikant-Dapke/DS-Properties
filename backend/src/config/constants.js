@@ -1,7 +1,19 @@
+// Account model: EXACTLY THREE roles. There is no fourth role.
+// - developer: owner/maintenance account, full access, provisioned only by
+//   the owner outside the API (seed/CLI). Never creatable via the API.
+// - partner: business operator; every business mutation needs unanimous
+//   approval from all other active partners.
+// - admin: read-only supervision of business data + user/system administration.
 export const ROLES = Object.freeze({
+  DEVELOPER: 'developer',
+  PARTNER: 'partner',
   ADMIN: 'admin',
-  READ_ONLY: 'read_only',
 });
+
+// Roles assignable through the application API (user management endpoints).
+// 'developer' is deliberately absent: developer access is owner-provisioned
+// only and can never be granted, directly or by promotion, via the API.
+export const API_ASSIGNABLE_ROLES = Object.freeze([ROLES.PARTNER, ROLES.ADMIN]);
 
 export const ROLE_LIST = Object.values(ROLES);
 

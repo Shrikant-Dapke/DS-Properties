@@ -26,11 +26,15 @@ function rowToRequest(row, approvals = []) {
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
     approvals: approvals.map((a) => ({
+      // getApprovals() returns camelCase keys while raw pg rows are
+      // snake_case: accept both so approver identity is never silently
+      // dropped (undefined keys vanish from JSON, breaking per-viewer
+      // decision state, duplicate-decision detection, and approver display).
       id: a.id,
-      adminUserId: a.admin_user_id,
+      adminUserId: a.adminUserId ?? a.admin_user_id,
       status: a.status,
       comment: a.comment,
-      decidedAt: a.decided_at,
+      decidedAt: a.decidedAt ?? a.decided_at,
     })),
   };
 }

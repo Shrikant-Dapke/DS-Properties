@@ -259,9 +259,22 @@ describe('Auth', () => {
 async function createThrowawayOperator() {
   const adminToken = await getAdminToken();
   const username = `lock_${Date.now()}`;
+  // Lockout mechanics are role-independent; use a partner user (needs a
+  // linked record) so no retired role appears in the suite.
+  const prec = await request(app)
+    .post('/api/v1/partners')
+    .set(authHeader(adminToken))
+    .send({ name: `LockRec_${Date.now()}` });
   const res = await request(app)
     .post('/api/v1/users')
     .set(authHeader(adminToken))
-    .send({ username, password: 'Test@1234', fullName: 'Lock Test', role: 'read_only' });
+    .send({
+      username,
+      password: 'Test@1234',
+      fullName: 'Lock Test',
+      role: 'partner',
+      partnerPublicId: prec.body.data.entity.publicId,
+    });
+  if (res.status !== 201) throw new Error(`lockout fixture failed: ${JSON.stringify(res.body)}`);
   return { username, password: 'Test@1234' };
 }
