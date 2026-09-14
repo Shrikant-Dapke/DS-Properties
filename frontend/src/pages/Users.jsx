@@ -17,6 +17,9 @@ import { useAuth } from '../hooks/useAuth.js';
 import { isDeveloper } from '../contexts/authContextDef.js';
 
 const emptyForm = { username: '', fullName: '', role: ROLES.PARTNER, password: '', partnerPublicId: '' };
+// Inline partner-onboarding state (Add-user flow only): select an existing
+// partner record, or create a brand-new one together with the login.
+const emptyNewPartner = { name: '', phone: '', email: '', address: '', notes: '' };
 
 // Roles assignable through this UI. The developer role is owner-provisioned
 // only and can never be granted here (the API rejects it for every caller).
@@ -35,6 +38,8 @@ export default function Users() {
   const [newPassword, setNewPassword] = useState('');
   const [deleting, setDeleting] = useState(null);
   const [partners, setPartners] = useState([]);
+  const [partnerMode, setPartnerMode] = useState('select');
+  const [newPartner, setNewPartner] = useState(emptyNewPartner);
 
   const load = async () => {
     setLoading(true);
@@ -48,23 +53,32 @@ export default function Users() {
     }
   };
 
+  const loadPartners = async () => {
+    try {
+      setPartners(await partnerApi.listAll());
+    } catch {
+      setPartners([]);
+    }
+  };
+
   useEffect(() => {
     load();
-    partnerApi
-      .listAll()
-      .then(setPartners)
-      .catch(() => setPartners([]));
+    loadPartners();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setPartnerMode('select');
+    setNewPartner(emptyNewPartner);
     setFormOpen(true);
   };
 
   const openEdit = (row) => {
     setEditing(row);
+    setPartnerMode('select');
+    setNewPartner(emptyNewPartner);
     setForm({
       username: row.username,
       fullName: row.fullName || '',
@@ -96,8 +110,14 @@ export default function Users() {
           setSaving(false);
           return;
         }
-        if (form.role === ROLES.PARTNER && !form.partnerPublicId) {
+        const creatingPartner = form.role === ROLES.PARTNER && partnerMode === 'create';
+        if (form.role === ROLES.PARTNER && !creatingPartner && !form.partnerPublicId) {
           toast.error('Select the partner record this login operates as');
+          setSaving(false);
+          return;
+        }
+        if (creatingPartner && !newPartner.name.trim()) {
+          toast.error('Partner name is required for the new partner record');
           setSaving(false);
           return;
         }
@@ -106,9 +126,23 @@ export default function Users() {
           password: form.password,
           fullName: form.fullName.trim(),
           role: form.role,
-          ...(form.role === ROLES.PARTNER ? { partnerPublicId: form.partnerPublicId } : {}),
+          ...(form.role === ROLES.PARTNER
+            ? creatingPartner
+              ? {
+                  newPartner: {
+                    name: newPartner.name.trim(),
+                    phone: newPartner.phone || undefined,
+                    email: newPartner.email || undefined,
+                    address: newPartner.address || undefined,
+                    notes: newPartner.notes || undefined,
+                  },
+                }
+              : { partnerPublicId: form.partnerPublicId }
+            : {}),
         });
-        pendingToast(result, 'User created');
+        pendingToast(result, creatingPartner ? 'Partner and user created' : 'User created');
+        // The directory now contains the freshly created partner record.
+        loadPartners();
       } else {
         const result = await userApi.update(editing.publicId, {
           fullName: form.fullName.trim() || undefined,
@@ -261,14 +295,21 @@ export default function Users() {
             required
           />
           <Input label="Full name *" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} required />
-          <Select label="Role *" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+          <Select
+            label="Role *"
+            value={form.role}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, role: e.target.value }));
+              setPartnerMode('select');
+            }}
+          >
             {ASSIGNABLE_ROLES.map((v) => (
               <option key={v} value={v}>
                 {ROLE_LABELS[v]}
               </option>
             ))}
           </Select>
-          {form.role === ROLES.PARTNER && (
+          {form.role === ROLES.PARTNER && (editing || partnerMode === 'select') && (
             <Select
               label="Partner record *"
               value={form.partnerPublicId}
@@ -282,6 +323,61 @@ export default function Users() {
                 </option>
               ))}
             </Select>
+          )}
+          {!editing && form.role === ROLES.PARTNER && partnerMode === 'select' && (
+            <div className="sm:col-span-2 -mt-2">
+              <button
+                type="button"
+                onClick={() => setPartnerMode('create')}
+                className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+              >
+                + Create new partner
+              </button>
+            </div>
+          )}
+          {!editing && form.role === ROLES.PARTNER && partnerMode === 'create' && (
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium text-slate-700">New partner record</p>
+                <button
+                  type="button"
+                  onClick={() => setPartnerMode('select')}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Use existing instead
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Partner name *"
+                  value={newPartner.name}
+                  onChange={(e) => setNewPartner((p) => ({ ...p, name: e.target.value }))}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  value={newPartner.phone}
+                  onChange={(e) => setNewPartner((p) => ({ ...p, phone: e.target.value }))}
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={newPartner.email}
+                  onChange={(e) => setNewPartner((p) => ({ ...p, email: e.target.value }))}
+                />
+                <Input
+                  label="Address"
+                  value={newPartner.address}
+                  onChange={(e) => setNewPartner((p) => ({ ...p, address: e.target.value }))}
+                />
+                <Input
+                  label="Notes"
+                  className="sm:col-span-2"
+                  value={newPartner.notes}
+                  onChange={(e) => setNewPartner((p) => ({ ...p, notes: e.target.value }))}
+                />
+              </div>
+            </div>
           )}
           {!editing && (
             <Input

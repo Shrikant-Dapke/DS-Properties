@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import { API_ASSIGNABLE_ROLES } from '../config/constants.js';
 import { publicIdSchema } from './common.js';
+import { createPartnerSchema } from './partnerValidators.js';
 
 export const loginSchema = Joi.object({
   username: Joi.string().trim().min(1).max(100).required(),
@@ -33,6 +34,16 @@ export const createUserSchema = Joi.object({
   // Business-partner identity link (partner public id). The service layer
   // enforces: required for role 'partner', forbidden for other roles.
   partnerPublicId: publicIdSchema.allow(null).optional(),
+  // Inline partner creation for onboarding a brand-new partner together with
+  // their login (single atomic request). Validated by the exact same schema
+  // the Partners module uses; allowed only for role 'partner', forbidden for
+  // every other role. The service layer additionally rejects combining this
+  // with partnerPublicId.
+  newPartner: Joi.when('role', {
+    is: 'partner',
+    then: createPartnerSchema.optional(),
+    otherwise: Joi.forbidden(),
+  }),
 });
 
 export const updateUserSchema = Joi.object({

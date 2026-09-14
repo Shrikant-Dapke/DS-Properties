@@ -8,6 +8,7 @@ import {
   softDeleteUser,
 } from '../models/userModel.js';
 import { findPartnerByPublicId, findPartnersByIds } from '../models/partnerModel.js';
+import { createNewPartner } from './partnerService.js';
 import { revokeUserRefreshTokens } from '../models/refreshTokenModel.js';
 import { BCRYPT_ROUNDS } from './authService.js';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
@@ -77,7 +78,27 @@ export async function createNewUser(data, ctx) {
     throw new ValidationError('Developer accounts can only be provisioned by the system owner');
   }
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
-  const partnerId = await resolvePartnerLink({ role: data.role, partnerPublicId: data.partnerPublicId, existing: null });
+  // Inline partner onboarding: a brand-new partner record plus its login in
+  // one call. The partner is created through the existing partner service
+  // (same validation, same partners/CREATE audit event), then linked below.
+  // This runs inside the governance apply transaction (direct or finalized),
+  // so a later user-creation failure rolls the partner insert back too —
+  // no orphan partner record is ever left behind.
+  let partnerId;
+  if (data.newPartner) {
+    // Joi already forbids newPartner for non-partner roles at both the route
+    // and governance layers; re-check here for direct service callers.
+    if (data.role !== 'partner') {
+      throw new ValidationError('Only partner users can be linked to a partner record');
+    }
+    if (data.partnerPublicId) {
+      throw new ValidationError('Provide either an existing partner or a new partner, not both');
+    }
+    const created = await createNewPartner(data.newPartner, ctx);
+    partnerId = (await findPartnerByPublicId(created.publicId)).id;
+  } else {
+    partnerId = await resolvePartnerLink({ role: data.role, partnerPublicId: data.partnerPublicId, existing: null });
+  }
   const user = await createUser({
     username: data.username,
     passwordHash,
