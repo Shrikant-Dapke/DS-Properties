@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { Button } from '../components/common/Button.jsx';
 import { Input } from '../components/common/Input.jsx';
 import { Card } from '../components/common/Card.jsx';
+import { EmptyState } from '../components/common/EmptyState.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
 import { formatDateTime, titleCase } from '../utils/formatters.js';
@@ -70,6 +71,15 @@ export default function Settings() {
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Settings are view-only for your role. Partners propose changes, which need unanimous partner approval.
         </div>
+      )}
+
+      {settings?.length === 0 && (
+        <Card>
+          <EmptyState
+            title="No configuration values yet"
+            message="Application settings have not been provisioned. An administrator can restore the defaults by applying the pending database migrations."
+          />
+        </Card>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">

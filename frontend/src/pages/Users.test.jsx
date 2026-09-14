@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Users from './Users.jsx';
 
@@ -137,5 +137,84 @@ describe('Users Add-user partner onboarding', () => {
     expect(payload.role).toBe('admin');
     expect(payload.partnerPublicId).toBeUndefined();
     expect(payload.newPartner).toBeUndefined();
+  });
+
+  it('edit flow sends the changed username so it actually persists', async () => {
+    useAuth.mockReturnValue({ user: { username: 'admin', role: 'admin' } });
+    userApi.list.mockResolvedValue({
+      rows: [{
+        publicId: 'u-1',
+        username: 'dattatraya',
+        fullName: 'Dattatraya',
+        role: 'admin',
+        partner: null,
+        isActive: true,
+        lastLoginAt: null,
+      }],
+    });
+    partnerApi.listAll.mockResolvedValue([]);
+    render(<Users />);
+    const user = userEvent.setup();
+
+    const row = (await screen.findByText('dattatraya')).closest('tr');
+    await user.click(within(row).getAllByRole('button')[0]);
+    await screen.findByText('Full name *');
+
+    const usernameInput = inputFor('Username *');
+    expect(usernameInput.disabled).toBe(false);
+    await user.clear(usernameInput);
+    await user.type(usernameInput, 'dattatraya2');
+    userApi.update.mockResolvedValue({});
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(userApi.update).toHaveBeenCalledTimes(1));
+    expect(userApi.update.mock.calls[0][0]).toBe('u-1');
+    expect(userApi.update.mock.calls[0][1].username).toBe('dattatraya2');
+  });
+
+  it('partner viewers see Request approval labels instead of direct actions', async () => {
+    useAuth.mockReturnValue({ user: { username: 'pta', role: 'partner' } });
+    userApi.list.mockResolvedValue({
+      rows: [{
+        publicId: 'u-2',
+        username: 'otheradmin',
+        fullName: 'Other Admin',
+        role: 'admin',
+        partner: null,
+        isActive: true,
+        lastLoginAt: null,
+      }],
+    });
+    partnerApi.listAll.mockResolvedValue([{ publicId: 'p-1', name: 'Existing Partner' }]);
+    render(<Users />);
+    const user = userEvent.setup();
+
+    const row = (await screen.findByText('otheradmin')).closest('tr');
+    expect(within(row).getByRole('button', { name: /request approval/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /add user/i }));
+    await screen.findByText('Username *');
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /request approval/i })).toBeInTheDocument();
+  });
+
+  it('partner create submits a request and reports pending approval', async () => {
+    useAuth.mockReturnValue({ user: { username: 'pta', role: 'partner' } });
+    userApi.list.mockResolvedValue({ rows: [] });
+    partnerApi.listAll.mockResolvedValue([{ publicId: 'p-1', name: 'Existing Partner' }]);
+    render(<Users />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /add user/i }));
+    await screen.findByText('Username *');
+    await user.type(inputFor('Username *'), 'candidate');
+    await user.type(inputFor('Full name *'), 'Candidate Person');
+    await user.type(inputFor('Password *'), 'Secret@123');
+    await user.selectOptions(selectFor('Partner record *'), 'p-1');
+    userApi.create.mockResolvedValue({ changeRequest: { status: 'PENDING' } });
+
+    await user.click(screen.getByRole('button', { name: /request approval/i }));
+    await waitFor(() => expect(userApi.create).toHaveBeenCalledTimes(1));
+    expect(userApi.create.mock.calls[0][0]).toMatchObject({ username: 'candidate', role: 'partner' });
   });
 });

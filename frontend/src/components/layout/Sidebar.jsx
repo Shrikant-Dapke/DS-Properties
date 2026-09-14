@@ -34,7 +34,7 @@ const navItems = [
   { to: '/reports', labelKey: 'nav.reports', icon: FileBarChart },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
   { to: '/approvals', labelKey: 'nav.approvals', icon: ShieldCheck, roles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER] },
-  { to: '/users', labelKey: 'nav.users', icon: UserCog, roles: [ROLES.ADMIN, ROLES.DEVELOPER] },
+  { to: '/users', labelKey: 'nav.users', icon: UserCog, roles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER] },
   { to: '/audit', labelKey: 'nav.audit', icon: ScrollText },
 ];
 

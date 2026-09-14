@@ -47,6 +47,10 @@ export const createUserSchema = Joi.object({
 });
 
 export const updateUserSchema = Joi.object({
+  username: Joi.string().trim().min(3).max(50)
+    .pattern(/^[a-zA-Z0-9_.-]+$/)
+    .messages({ 'string.pattern.base': 'Username may contain only letters, numbers, dots, dashes and underscores' })
+    .optional(),
   fullName: Joi.string().trim().min(1).max(150).optional(),
   email: Joi.string().email().max(200).allow('').allow(null).optional(),
   phone: Joi.string().trim().max(30).allow('').allow(null).optional(),

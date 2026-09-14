@@ -1,5 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
+import { pool } from '../setup.js';
 import {
   getAdminToken,
   authHeader,
@@ -67,12 +68,17 @@ describe('Domains: customers, partners, categories (via partner governance)', ()
       expect(res.status).toBe(403);
     });
 
-    it('forbids partners from managing users (separation of duties)', async () => {
+    it('partners initiate (never execute) user management via approval requests', async () => {
       const res = await request(app)
         .post('/api/v1/users')
         .set(authHeader(Q[0].accessToken))
         .send({ username: 'Nope', password: 'Test@1234', fullName: 'N', role: 'partner' });
-      expect(res.status).toBe(403);
+      // Initiation is allowed; direct execution is not: PENDING request, no user.
+      expect(res.status).toBe(201);
+      expect(res.body.data.changeRequest.status).toBe('PENDING');
+      expect(res.body.data.entity).toBeNull();
+      const check = await pool.query('SELECT id FROM users WHERE username = $1 AND deleted_at IS NULL', ['Nope']);
+      expect(check.rows).toHaveLength(0);
     });
 
     it('partners can list customers (read-only)', async () => {

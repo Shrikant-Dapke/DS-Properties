@@ -142,6 +142,7 @@ export async function updateExistingUser(publicId, data, ctx) {
   }
 
   const fields = {};
+  if (data.username !== undefined) fields.username = data.username;
   if (data.fullName !== undefined) fields.full_name = data.fullName;
   if (data.email !== undefined) fields.email = data.email ?? null;
   if (data.phone !== undefined) fields.phone = data.phone ?? null;

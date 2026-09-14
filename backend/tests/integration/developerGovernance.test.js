@@ -59,11 +59,15 @@ describe('Developer / role-model governance (exactly three roles)', () => {
   });
 
   it('5: partner cannot create a developer', async () => {
+    const username = `pdev_${Date.now()}`;
     const res = await request(app).post('/api/v1/users').set(authHeader(Q[0].accessToken)).send({
-      username: `pdev_${Date.now()}`, password: 'Test@1234', fullName: 'P', role: 'developer',
+      username, password: 'Test@1234', fullName: 'P', role: 'developer',
     });
-    // Partners cannot manage users at all (route-level), let alone developers.
-    expect(res.status).toBe(403);
+    // Developer role is rejected at validation for every caller: no approval
+    // request is ever created from a developer-role payload.
+    expect(res.status).toBe(400);
+    const pending = await request(app).get('/api/v1/change-requests').query({ entityType: 'user', status: 'PENDING' }).set(authHeader(adminToken));
+    expect(pending.body.data.rows.map((r) => r.proposedState?.username)).not.toContain(username);
   });
 
   it('6: admin cannot create a developer', async () => {
@@ -249,11 +253,17 @@ describe('Developer / role-model governance (exactly three roles)', () => {
     // Partner attempts self-promotion to developer and to admin.
     const users = await request(app).get('/api/v1/users').query({ search: Q[0].username }).set(authHeader(adminToken));
     const me = users.body.data.rows[0];
+    // Developer role is rejected at validation (fail closed, no request created).
     const selfPromo = await request(app).put(`/api/v1/users/${me.publicId}`).set(authHeader(Q[0].accessToken)).send({ role: 'developer' });
-    expect(selfPromo.status).toBe(403);
-    // Partner user-management surface is fully closed.
-    const del = await request(app).delete(`/api/v1/users/${me.publicId}`).set(authHeader(Q[0].accessToken));
-    expect(del.status).toBe(403);
+    expect(selfPromo.status).toBe(400);
+    // Other user writes become approval requests, never direct mutations
+    // (self-delete stays rejected by the pre-existing self-guard, so target
+    // another partner's login here).
+    const other = await request(app).get('/api/v1/users').query({ search: Q[1].username }).set(authHeader(adminToken));
+    const del = await request(app).delete(`/api/v1/users/${other.body.data.rows[0].publicId}`).set(authHeader(Q[0].accessToken));
+    expect(del.status).toBe(200);
+    expect(del.body.data.changeRequest.status).toBe('PENDING');
+    expect(del.body.data.entity).toBeNull();
     // Read-only-free model: unknown roles rejected at validation.
     const bad = await request(app).post('/api/v1/users').set(authHeader(adminToken)).send({
       username: `bad_${Date.now()}`, password: 'Test@1234', fullName: 'B', role: 'superadmin',

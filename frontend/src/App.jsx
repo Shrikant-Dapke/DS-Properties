@@ -53,7 +53,7 @@ export default function App() {
             <Route
               path="users"
               element={
-                <ProtectedRoute roles={[ROLES.ADMIN, ROLES.DEVELOPER]}>
+                <ProtectedRoute roles={[ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER]}>
                   <Users />
                 </ProtectedRoute>
               }

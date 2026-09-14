@@ -115,4 +115,27 @@ describe('Approvals decision visibility (server-derived)', () => {
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(screen.getByText('approvals.decidedByYou')).toBeInTheDocument();
   });
+
+  it('partner-governed user request: eligible partner decides, admin is view-only', async () => {
+    // The server always sends an explicit viewerCanDecide; explicit false
+    // beats the legacy client fallback, so mirror real payloads here.
+    const userRequest = (viewerCanDecide) =>
+      crRow({ entityType: 'user', operation: 'create', viewerCanDecide });
+
+    // Eligible partner reviewer gets controls.
+    changeRequestApi.list.mockResolvedValue({ rows: [userRequest(true)], pagination: {} });
+    const { unmount } = renderAs({ id: 4, username: 'ptb', role: 'partner' });
+    const row = (await screen.findByText('#3')).closest('tr');
+    expect(within(row).getByRole('button', { name: /approvals.approve/i })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /approvals.reject/i })).toBeInTheDocument();
+    unmount();
+
+    // Same request, admin viewer without decision power: Details only.
+    changeRequestApi.list.mockResolvedValue({ rows: [userRequest(false)], pagination: {} });
+    renderAs({ id: 1, username: 'admin', role: 'admin' });
+    const adminRow = (await screen.findByText('#3')).closest('tr');
+    expect(within(adminRow).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
+    expect(within(adminRow).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
+    expect(within(adminRow).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
+  });
 });

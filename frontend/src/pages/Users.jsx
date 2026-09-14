@@ -14,7 +14,7 @@ import { Badge } from '../components/common/Badge.jsx';
 import { formatDateTime } from '../utils/formatters.js';
 import { ROLES, ROLE_LABELS } from '../utils/constants.js';
 import { useAuth } from '../hooks/useAuth.js';
-import { isDeveloper } from '../contexts/authContextDef.js';
+import { isDeveloper, isPartner } from '../contexts/authContextDef.js';
 
 const emptyForm = { username: '', fullName: '', role: ROLES.PARTNER, password: '', partnerPublicId: '' };
 // Inline partner-onboarding state (Add-user flow only): select an existing
@@ -92,6 +92,12 @@ export default function Users() {
   const pendingToast = (result, directMessage) =>
     toast.success(result?.changeRequest?.status === 'PENDING' ? 'Submitted for admin approval' : directMessage);
 
+  // Partners see and initiate every user action, but never execute directly:
+  // their submissions become approval requests (see governanceService). The
+  // button labels communicate that distinction; the backend stays authoritative.
+  const proposing = isPartner(me);
+  const confirmLabel = (direct) => (proposing ? 'Request approval' : direct);
+
   const save = async () => {
     if (!form.username.trim()) {
       toast.error('Username is required');
@@ -144,7 +150,13 @@ export default function Users() {
         // The directory now contains the freshly created partner record.
         loadPartners();
       } else {
+        if (!form.username.trim()) {
+          toast.error('Username is required');
+          setSaving(false);
+          return;
+        }
         const result = await userApi.update(editing.publicId, {
+          username: form.username.trim(),
           fullName: form.fullName.trim() || undefined,
           role: form.role,
           ...(form.role === ROLES.PARTNER ? { partnerPublicId: form.partnerPublicId || undefined } : {}),
@@ -244,7 +256,7 @@ export default function Users() {
             <KeyRound className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => toggleActive(r)}>
-            {r.isActive ? 'Disable' : 'Enable'}
+            {proposing ? 'Request approval' : (r.isActive ? 'Disable' : 'Enable')}
           </Button>
           <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -281,7 +293,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button onClick={save} loading={saving}>
-              Save
+              {confirmLabel('Save')}
             </Button>
           </>
         }
@@ -290,7 +302,6 @@ export default function Users() {
           <Input
             label="Username *"
             value={form.username}
-            disabled={!!editing}
             onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
             required
           />
@@ -401,7 +412,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button onClick={doReset} loading={saving}>
-              Reset password
+              {confirmLabel('Reset password')}
             </Button>
           </>
         }
@@ -422,7 +433,7 @@ export default function Users() {
         onConfirm={confirmDelete}
         title="Delete user"
         message={`Delete user "${deleting?.username}"? This cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={confirmLabel('Delete')}
         danger
       />
     </div>

@@ -573,6 +573,67 @@ export async function submitChange({ entityType, entityId, operation, proposedSt
   }
   const sensitive = entityType === 'user' && isSensitiveUserOp({ targetUser, operation, payload: sanitizedState });
 
+  // Partner-initiated user management: partners may SEE and INITIATE any user
+  // write (create/promote/deactivate/delete/reset), but can NEVER apply
+  // one directly. Reviewers are the OTHER ACTIVE PARTNERS — partners govern
+  // partners, exactly like business-data governance. Admins are NOT reviewers
+  // here; they keep their existing supervisory role but cannot approve these
+  // requests. The requester is excluded from the frozen snapshot, so
+  // self-approval is impossible. Approval/rejection then flows through the
+  // standard finalize path, so the operation executes at most once and is
+  // fully audited. Non-user entities never reach this branch (partner-quorum
+  // or direct rules apply above).
+  if (entityType === 'user' && ctx.role === 'partner') {
+    if (operation === 'create' && sanitizedState?.role === 'developer') {
+      throw new ValidationError('Developer accounts can only be managed by the system owner');
+    }
+    // Only an active partner (active login with an active linked record) may
+    // initiate. Disabled/unlinked callers fail closed here.
+    const requester = await isActivePartnerUser(ctx.userId);
+    if (!requester) {
+      throw new AuthorizationError('Only active partners can propose user changes');
+    }
+    // Reviewers: every OTHER active partner, frozen at creation time.
+    // Never silently auto-approve when no other partner exists.
+    const partnerPool = await getActivePartnerUserIds();
+    const approvers = partnerPool.filter((id) => id !== ctx.userId);
+    if (!approvers.length) {
+      throw new AppError(
+        'No other active partners are available to approve this change',
+        409,
+        'NO_PARTNER_QUORUM',
+      );
+    }
+    let previousState = null;
+    let versionTag = null;
+    if (operation !== 'create') {
+      const snap = await snapshotEntity(entityType, entityId);
+      previousState = snap.previousState;
+      versionTag = snap.versionTag;
+    }
+    const partnerRequest = await createChangeRequest({
+      entityType,
+      entityId,
+      operation,
+      requestedBy: ctx.userId,
+      previousState,
+      proposedState: sanitizedState,
+      requiredApprovers: approvers,
+      versionTag,
+    });
+    await logAudit({
+      userId: ctx.userId,
+      action: 'change_request_create',
+      domain: 'governance',
+      recordId: partnerRequest.publicId,
+      newValues: { entityType, operation, entityId },
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    const changeRequest = await getChangeRequestByPublicId(partnerRequest.publicId);
+    return { changeRequest, entity: null, meta: null };
+  }
+
   if (!sensitive) {
     const applied = await applyDirect(entityType, entityId, operation, sanitizedState, ctx);
     return {
@@ -705,6 +766,18 @@ async function loadPending(publicId, adminUser) {
   }
   if (!request.requiredApprovers.includes(adminUser.id)) {
     throw new AuthorizationError('You are not a required approver for this change');
+  }
+  // Partner-governed user requests: a partner decider must still be an active
+  // partner (active login with an active linked record) at decision time. A
+  // partner deactivated after the snapshot was frozen loses decision power
+  // (fail closed). This check only ever fires for partners inside the
+  // snapshot — admin deciders on admin-governed requests keep their existing
+  // rules untouched.
+  if (request.entityType === 'user' && adminUser.role === 'partner') {
+    const stillActive = await isActivePartnerUser(adminUser.id);
+    if (!stillActive) {
+      throw new AuthorizationError('Only active partners can decide change requests');
+    }
   }
   if (request.approvals.some((a) => a.adminUserId === adminUser.id)) {
     throw new ConflictError('You have already decided on this change request', 'DUPLICATE_APPROVAL');

@@ -189,7 +189,7 @@ describe('Partner user creation with inline partner onboarding (POST /users newP
     expect(await activePartnerCount()).toBe(before);
   });
 
-  it('forbids partner-role callers from exploiting the combined flow (403)', async () => {
+  it('partner-initiated combined flow becomes a pending request (never direct)', async () => {
     const p = await setupPartner(adminToken, 'npc');
     const before = await activePartnerCount();
     const res = await request(app)
@@ -202,8 +202,10 @@ describe('Partner user creation with inline partner onboarding (POST /users newP
         role: 'partner',
         newPartner: { name: uniq('Escalated Partner') },
       });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    // Initiation allowed, execution not: PENDING request, no partner row, no user.
+    expect(res.status).toBe(201);
+    expect(res.body.data.changeRequest.status).toBe('PENDING');
+    expect(res.body.data.entity).toBeNull();
     expect(await activePartnerCount()).toBe(before);
   });
 });

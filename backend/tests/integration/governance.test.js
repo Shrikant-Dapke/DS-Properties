@@ -1,5 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
+import { pool } from '../setup.js';
 import { cancelChange } from '../../src/services/governanceService.js';
 import { getAdminToken, authHeader, login, setupPartner, setupSecondAdmin } from '../helpers/api.js';
 
@@ -121,13 +122,27 @@ describe('Access control & governance', () => {
     });
   });
 
-  describe('partner cannot manage users', () => {
-    it('cannot create a user', async () => {
+  describe('partner initiates user management (never executes directly)', () => {
+    it('sole partner fails closed; quorum partner initiates as pending', async () => {
+      // At this point stranger is the only active partner user: with nobody
+      // to review, initiation must fail closed (never self-approved).
+      const solo = await request(app)
+        .post('/api/v1/users')
+        .set(authHeader(stranger.accessToken))
+        .send({ username: `solo_${Date.now()}`, password: 'Test@1234', fullName: 'Solo', role: 'partner' });
+      expect(solo.status).toBe(409);
+      expect(solo.body.error.code).toBe('NO_PARTNER_QUORUM');
+
+      // A second active partner completes the quorum: initiation works and
+      // stays pending with no direct effect.
+      await setupPartner(adminToken, 'quorum2');
       const res = await request(app)
         .post('/api/v1/users')
         .set(authHeader(stranger.accessToken))
-        .send({ username: 'X', password: 'Test@1234', fullName: 'X', role: 'partner' });
-      expect(res.status).toBe(403);
+        .send({ username: `init_${Date.now()}`, password: 'Test@1234', fullName: 'Initiated', role: 'partner' });
+      expect(res.status).toBe(201);
+      expect(res.body.data.changeRequest.status).toBe('PENDING');
+      expect(res.body.data.entity).toBeNull();
     });
 
     it('cannot reach decisions outside its snapshot', async () => {
@@ -475,16 +490,26 @@ describe('Access control & governance', () => {
       await deleteAdminGoverned(entity.publicId, [accessToken, a2.accessToken]);
     });
 
-    it('partner role cannot manage users, reset passwords, or approve outside snapshot', async () => {
+    it('partner role initiates (never executes) user deletes and password resets', async () => {
+      // Self-sufficient quorum: this test must not depend on other tests'
+      // partner setups for reviewer availability.
+      await setupPartner(adminToken, 'quorum3');
       // Reuse the fresh target's own token for cleanup (no extra login).
       const { a2, entity, accessToken } = await freshAdminTarget();
       const del = await request(app).delete(`/api/v1/users/${entity.publicId}`).set(authHeader(stranger.accessToken));
-      expect(del.status).toBe(403);
+      expect(del.status).toBe(200);
+      expect(del.body.data.changeRequest.status).toBe('PENDING');
+      expect(del.body.data.entity).toBeNull();
       const reset = await request(app)
         .post(`/api/v1/users/${entity.publicId}/reset-password`)
         .set(authHeader(stranger.accessToken))
         .send({ newPassword: 'Blocked@123' });
-      expect(reset.status).toBe(403);
+      expect(reset.status).toBe(200);
+      expect(reset.body.data.changeRequest.status).toBe('PENDING');
+      // Target untouched by either request.
+      const still = await pool.query('SELECT is_active, deleted_at FROM users WHERE public_id = $1', [entity.publicId]);
+      expect(still.rows[0].is_active).toBe(true);
+      expect(still.rows[0].deleted_at).toBeNull();
       // Cleanup with real admins (target first, non-target last) — reuse the
       // already-logged-in target token, no extra /auth/login.
       await deleteAdminGoverned(entity.publicId, [accessToken, a2.accessToken]);
