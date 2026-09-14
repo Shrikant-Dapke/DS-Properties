@@ -41,7 +41,7 @@ export function findCategoryById(id) {
 
 export function findCategoryByPublicId(publicId) {
   return query(
-    `SELECT id FROM expense_categories WHERE public_id = $1 AND deleted_at IS NULL`,
+    `SELECT id, updated_at FROM expense_categories WHERE public_id = $1 AND deleted_at IS NULL`,
     [publicId],
   ).then((r) => r.rows[0] || null);
 }

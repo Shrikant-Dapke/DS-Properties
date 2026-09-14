@@ -75,6 +75,8 @@ export default function Partners() {
     try {
       const payload = { ...form, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, notes: form.notes || undefined };
       if (editing) {
+        const versionTag = editing.versionTag ?? editing.updatedAt ?? undefined;
+        if (versionTag) payload.versionTag = versionTag;
         await partnerApi.update(editing.publicId, payload);
         toast.success('Partner updated');
       } else {

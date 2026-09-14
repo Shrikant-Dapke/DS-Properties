@@ -12,16 +12,31 @@ const { Pool } = pg;
 // `client` argument through every function signature.
 const txStore = new AsyncLocalStorage();
 
-export const pool = new Pool({
-  host: config.db.host,
-  port: config.db.port,
-  user: config.db.user,
-  password: config.db.password,
-  database: config.db.database,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+export const pool = new Pool(
+  config.db.connectionString
+    ? {
+        // Production path (Supabase via DATABASE_URL, incl. pooled 6543).
+        // Small pool + short idle timeout: each serverless instance holds at
+        // most `poolMax` connections and releases them quickly.
+        connectionString: config.db.connectionString,
+        ssl: config.db.ssl ? { rejectUnauthorized: false } : undefined,
+        max: config.db.poolMax,
+        idleTimeoutMillis: config.isProd ? 10000 : 30000,
+        connectionTimeoutMillis: config.isProd ? 10000 : 5000,
+      }
+    : {
+        // Local-dev path (individual PG* fields). Unchanged behaviour.
+        host: config.db.host,
+        port: config.db.port,
+        user: config.db.user,
+        password: config.db.password,
+        database: config.db.database,
+        ssl: config.db.ssl ? { rejectUnauthorized: false } : undefined,
+        max: config.db.poolMax,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      },
+);
 
 pool.on('error', (err) => {
   logger.error({ err }, 'Unexpected error on idle PostgreSQL client');

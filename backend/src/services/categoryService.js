@@ -8,9 +8,21 @@ import {
   softDeleteCategory,
   countCategoryTransactions,
 } from '../models/categoryModel.js';
-import { NotFoundError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import { AUDIT_ACTIONS } from '../config/constants.js';
 import { logAudit } from './auditService.js';
+
+function versionOf(value) {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function assertFresh(row, expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || expectedVersion === '') return;
+  if (versionOf(row.updated_at) !== String(expectedVersion)) {
+    throw new ConflictError('Category changed since you loaded it', 'STALE_CONFLICT');
+  }
+}
 
 function serialize(cat) {
   return {
@@ -20,6 +32,12 @@ function serialize(cat) {
     description: cat.description,
     isActive: cat.is_active,
     sortOrder: cat.sort_order,
+    createdAt: cat.created_at,
+    updatedAt: cat.updated_at,
+    // Optimistic-concurrency source: clients read versionTag (or updatedAt)
+    // from GET and echo it back as versionTag on update. Absent tags proceed
+    // untouched so existing clients keep working.
+    versionTag: versionOf(cat.updated_at),
   };
 }
 
@@ -68,6 +86,9 @@ export async function updateExistingCategory(publicId, data, ctx) {
   const row = await findCategoryByPublicId(publicId);
   if (!row) throw new NotFoundError('Category not found');
   const before = await findCategoryById(row.id);
+  // Optimistic concurrency: callers may pass the versionTag they read;
+  // absent tags (direct path) proceed untouched. The tag is never a column.
+  assertFresh(before, data?.versionTag ?? data?.expectedVersion);
 
   const fields = {};
   const columnMap = {
@@ -77,8 +98,13 @@ export async function updateExistingCategory(publicId, data, ctx) {
     sortOrder: 'sort_order',
     isActive: 'is_active',
   };
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(data ?? {})) {
+    if (k === 'versionTag' || k === 'expectedVersion') continue;
+    if (!(k in columnMap)) continue;
     fields[columnMap[k]] = v;
+  }
+  if (Object.keys(fields).length === 0) {
+    throw new ValidationError('No valid fields to update');
   }
   const cat = await updateCategory(row.id, fields).catch((err) => {
     if (err.code === '23505') throw new ConflictError('Category slug already exists', 'SLUG_TAKEN');

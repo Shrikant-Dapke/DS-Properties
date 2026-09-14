@@ -14,18 +14,11 @@
 // role for every caller, including admins.
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import pg from 'pg';
+import { createScriptPool } from './dbPool.js';
 
 dotenv.config();
 
-const { Pool } = pg;
-const pool = new Pool({
-  host: process.env.PGHOST || 'localhost',
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || '',
-  database: process.env.PGDATABASE || 'ds_properties_v4',
-});
+const pool = createScriptPool();
 
 const USERNAME = process.env.DEVELOPER_USERNAME;
 const PASSWORD = process.env.DEVELOPER_PASSWORD;

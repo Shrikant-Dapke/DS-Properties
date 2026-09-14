@@ -8,9 +8,21 @@ import {
   countPartnerTransactions,
 } from '../models/partnerModel.js';
 import { listPartnerLedger } from '../models/transactionModel.js';
-import { NotFoundError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import { AUDIT_ACTIONS } from '../config/constants.js';
 import { logAudit } from './auditService.js';
+
+function versionOf(value) {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function assertFresh(row, expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || expectedVersion === '') return;
+  if (versionOf(row.updated_at) !== String(expectedVersion)) {
+    throw new ConflictError('Partner changed since you loaded it', 'STALE_CONFLICT');
+  }
+}
 
 function serialize(partner) {
   return {
@@ -24,6 +36,10 @@ function serialize(partner) {
     totalInflow: partner.total_inflow,
     createdAt: partner.created_at,
     updatedAt: partner.updated_at,
+    // Optimistic-concurrency source: clients read versionTag (or updatedAt)
+    // from GET and echo it back as versionTag on update. Absent tags proceed
+    // untouched so existing clients keep working.
+    versionTag: versionOf(partner.updated_at),
   };
 }
 
@@ -65,11 +81,19 @@ export async function updateExistingPartner(publicId, data, ctx) {
   const row = await findPartnerByPublicId(publicId);
   if (!row) throw new NotFoundError('Partner not found');
   const before = await findPartnerById(row.id);
+  // Optimistic concurrency: callers may pass the versionTag they read;
+  // absent tags (direct path) proceed untouched. The tag is never a column.
+  assertFresh(before, data?.versionTag ?? data?.expectedVersion);
 
   const fields = {};
   const columnMap = { name: 'name', phone: 'phone', email: 'email', address: 'address', notes: 'notes', isActive: 'is_active' };
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(data ?? {})) {
+    if (k === 'versionTag' || k === 'expectedVersion') continue;
+    if (!(k in columnMap)) continue;
     fields[columnMap[k]] = v;
+  }
+  if (Object.keys(fields).length === 0) {
+    throw new ValidationError('No valid fields to update');
   }
   const partner = await updatePartner(row.id, fields);
 

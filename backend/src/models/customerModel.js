@@ -49,7 +49,7 @@ export function findCustomerById(id) {
 
 export function findCustomerByPublicId(publicId) {
   return query(
-    `SELECT id FROM customers WHERE public_id = $1 AND deleted_at IS NULL`,
+    `SELECT id, updated_at FROM customers WHERE public_id = $1 AND deleted_at IS NULL`,
     [publicId],
   ).then((r) => r.rows[0] || null);
 }

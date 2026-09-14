@@ -75,6 +75,8 @@ export default function Categories() {
       };
       if (editing) {
         payload.isActive = form.isActive;
+        const versionTag = editing.versionTag ?? editing.updatedAt ?? undefined;
+        if (versionTag) payload.versionTag = versionTag;
         const result = await categoryApi.update(editing.publicId, payload);
         pendingToast(result, 'Category updated');
       } else {

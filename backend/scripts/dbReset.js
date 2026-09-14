@@ -1,19 +1,20 @@
 import dotenv from 'dotenv';
-import pg from 'pg';
+import { createScriptPool } from './dbPool.js';
 
 dotenv.config();
 
-const { Pool } = pg;
-const pool = new Pool({
-  host: process.env.PGHOST || 'localhost',
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || '',
-  database: process.env.PGDATABASE || 'ds_properties_v4',
-});
+// Safety guard: dropping all tables must never happen in production.
+if (process.env.NODE_ENV === 'production') {
+  console.error('Refusing: `npm run db:reset` is blocked in NODE_ENV=production.');
+  process.exit(1);
+}
+
+const pool = createScriptPool();
 
 const TABLES = [
   'schema_migrations',
+  'change_approvals',
+  'change_requests',
   'refresh_tokens',
   'audit_logs',
   'transactions',

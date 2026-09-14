@@ -76,6 +76,8 @@ export default function Customers() {
     try {
       const payload = { ...form, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, notes: form.notes || undefined };
       if (editing) {
+        const versionTag = editing.versionTag ?? editing.updatedAt ?? undefined;
+        if (versionTag) payload.versionTag = versionTag;
         const result = await customerApi.update(editing.publicId, payload);
         pendingToast(result, 'Customer updated');
       } else {

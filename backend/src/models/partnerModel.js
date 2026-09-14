@@ -47,7 +47,7 @@ export function findPartnerById(id) {
 
 export function findPartnerByPublicId(publicId) {
   return query(
-    `SELECT id, is_active FROM partners WHERE public_id = $1 AND deleted_at IS NULL`,
+    `SELECT id, is_active, updated_at FROM partners WHERE public_id = $1 AND deleted_at IS NULL`,
     [publicId],
   ).then((r) => r.rows[0] || null);
 }

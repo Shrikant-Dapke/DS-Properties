@@ -15,6 +15,10 @@ export const updatePartnerSchema = Joi.object({
   address: Joi.string().trim().max(500).allow('').allow(null).optional(),
   notes: Joi.string().trim().max(2000).allow('').allow(null).optional(),
   isActive: Joi.boolean().optional(),
+  // Optional optimistic-concurrency tag (read from GET versionTag/updatedAt).
+  // Absent tags proceed untouched so existing clients keep working.
+  versionTag: Joi.string().max(100).allow(null).optional(),
+  expectedVersion: Joi.string().max(100).allow(null).optional(),
 }).min(1);
 
 export const listPartnerQuerySchema = Joi.object({

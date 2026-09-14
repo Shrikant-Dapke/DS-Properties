@@ -8,9 +8,21 @@ import {
   countCustomerTransactions,
 } from '../models/customerModel.js';
 import { listCustomerLedger } from '../models/transactionModel.js';
-import { NotFoundError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import { AUDIT_ACTIONS } from '../config/constants.js';
 import { logAudit } from './auditService.js';
+
+function versionOf(value) {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function assertFresh(row, expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || expectedVersion === '') return;
+  if (versionOf(row.updated_at) !== String(expectedVersion)) {
+    throw new ConflictError('Customer changed since you loaded it', 'STALE_CONFLICT');
+  }
+}
 
 function serialize(customer) {
   return {
@@ -23,6 +35,10 @@ function serialize(customer) {
     totalPaid: customer.total_paid,
     createdAt: customer.created_at,
     updatedAt: customer.updated_at,
+    // Optimistic-concurrency source: clients read versionTag (or updatedAt)
+    // from GET and echo it back as versionTag on update. Absent tags proceed
+    // untouched so existing clients keep working.
+    versionTag: versionOf(customer.updated_at),
   };
 }
 
@@ -64,10 +80,19 @@ export async function updateExistingCustomer(publicId, data, ctx) {
   const row = await findCustomerByPublicId(publicId);
   if (!row) throw new NotFoundError('Customer not found');
   const before = await findCustomerById(row.id);
+  // Optimistic concurrency: callers may pass the versionTag they read;
+  // absent tags (direct path) proceed untouched. The tag is never a column.
+  assertFresh(before, data?.versionTag ?? data?.expectedVersion);
 
+  const allowed = new Set(['name', 'phone', 'email', 'address', 'notes']);
   const fields = {};
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(data ?? {})) {
+    if (k === 'versionTag' || k === 'expectedVersion') continue;
+    if (!allowed.has(k)) continue;
     fields[k] = v;
+  }
+  if (Object.keys(fields).length === 0) {
+    throw new ValidationError('No valid fields to update');
   }
   const customer = await updateCustomer(row.id, fields);
 
