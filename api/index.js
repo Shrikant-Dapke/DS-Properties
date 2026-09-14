@@ -1,8 +1,10 @@
 // Vercel serverless adapter (single-project deployment from the repo root).
-//
-// Same Express app as `backend/server.js` uses locally — no logic is
-// duplicated or rewritten here. Migrations never run per request; apply them
-// explicitly with `npm run migrate` (see `backend/scripts/migrate.js`).
-import app from '../backend/src/app.js';
+// The backend is ESM, while Vercel loads this serverless entrypoint as CommonJS.
+// Dynamic import bridges the two module systems without changing backend logic.
+let appPromise;
 
-export default app;
+module.exports = async function handler(req, res) {
+  appPromise ??= import('../backend/src/app.js').then(({ default: app }) => app);
+  const app = await appPromise;
+  return app(req, res);
+};
