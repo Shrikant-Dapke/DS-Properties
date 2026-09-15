@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast.js';
 import { Input } from '../components/common/Input.jsx';
 import { Select } from '../components/common/Select.jsx';
 import { Card } from '../components/common/Card.jsx';
+import { DataTable } from '../components/common/DataTable.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
@@ -20,7 +21,7 @@ const now = new Date();
 function ExportButtons({ pdf, excel }) {
   const toast = useToast();
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-2 gap-2 md:flex" data-testid="export-buttons">
       <Button
         variant="secondary"
         type="button"
@@ -91,7 +92,7 @@ function MonthReport({ range }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           {summaryCards(data?.summary).map((s) => (
             <Card key={s.label} pad={false}>
@@ -191,31 +192,23 @@ function MonthReport({ range }) {
             Totals above always cover the full period.
           </p>
         )}
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              {txCols.map((c) => (
-                <th key={c.key} className={`px-4 py-2.5 font-semibold ${c.align === 'right' ? 'text-right' : ''}`}>
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {(data?.transactions ?? []).map((t) => (
-              <tr key={t.publicId}>
-                {txCols.map((c) => (
-                  <td key={c.key} className={`px-4 py-2.5 ${c.align === 'right' ? 'text-right' : ''}`}>
-                    {c.render(t)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {(data?.transactions ?? []).length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">No transactions in this period.</p>
-        )}
+        <DataTable
+          columns={txCols}
+          rows={data?.transactions ?? []}
+          loading={false}
+          emptyMessage="No transactions in this period."
+          renderCard={(r) => (
+            <div className="px-4 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-slate-800">{r.description || r.paidTo || '—'}</p>
+                <span className="shrink-0 text-sm font-semibold text-slate-800">{formatINR(r.amount)}</span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                {formatDate(r.transactionDate)} · {titleCase(r.transactionType)} · {titleCase(r.sourceType)}
+              </p>
+            </div>
+          )}
+        />
       </Card>
     </div>
   );
@@ -250,7 +243,7 @@ function DailyReport({ date }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Card pad={false}>
             <div className="p-4">
@@ -346,7 +339,7 @@ function CategoryReportView({ range }) {
   return (
     <div>
       <div className="mb-4">
-        <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <Card pad={false}>
             <div className="p-4">
               <p className="text-xs text-slate-500">Total outtake · {formatDate(range.from)} → {formatDate(range.to)}</p>
@@ -426,7 +419,7 @@ function PartnerReportView({ partnerId, partners, range }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Card pad={false}>
             <div className="p-4">
@@ -459,30 +452,23 @@ function PartnerReportView({ partnerId, partners, range }) {
       </div>
 
       <Card title="Ledger" pad={false}>
-        {(data?.ledger?.rows ?? []).length > 0 ? (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-                <th className="px-4 py-2.5 font-semibold">Date</th>
-                <th className="px-4 py-2.5 font-semibold">Type</th>
-                <th className="px-4 py-2.5 font-semibold">Description</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.ledger.rows.map((t) => (
-                <tr key={t.publicId}>
-                  <td className="px-4 py-2.5">{formatDate(t.transactionDate)}</td>
-                  <td className="px-4 py-2.5">{titleCase(t.sourceType)}</td>
-                  <td className="px-4 py-2.5">{t.description || t.paidTo || '—'}</td>
-                  <td className="px-4 py-2.5 text-right font-medium">{formatINR(t.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="py-8 text-center text-sm text-slate-500">No transactions for this partner.</p>
-        )}
+        <DataTable
+          columns={ledgerCols}
+          rows={data?.ledger?.rows ?? []}
+          loading={false}
+          emptyMessage="No transactions for this partner."
+          renderCard={(r) => (
+            <div className="px-4 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-slate-800">{r.description || r.paidTo || '—'}</p>
+                <span className="shrink-0 text-sm font-semibold text-slate-800">{formatINR(r.amount)}</span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                {formatDate(r.transactionDate)} · {titleCase(r.sourceType)}
+              </p>
+            </div>
+          )}
+        />
       </Card>
     </div>
   );
@@ -517,12 +503,12 @@ export default function Reports() {
       <PageHeader title="Reports" subtitle="Financial summaries and exports" />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 activeTab === t.key ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -543,7 +529,7 @@ export default function Reports() {
 
         {activeTab === 'partner' && (
           <>
-            <Select label="Partner" value={partnerId} onChange={(e) => setPartnerId(e.target.value)} className="w-64">
+            <Select label="Partner" value={partnerId} onChange={(e) => setPartnerId(e.target.value)} className="w-full sm:w-64">
               <option value="">Select partner…</option>
               {partners.map((p) => (
                 <option key={p.publicId} value={p.publicId}>

@@ -52,6 +52,13 @@ function renderAsAdmin() {
   return render(<Users />);
 }
 
+// Rows render twice in jsdom (mobile card + desktop table, CSS-hidden in a
+// real browser): scope row lookups to the desktop table.
+async function tableRow(text) {
+  const table = await screen.findByRole('table');
+  return within(table).getByText(text).closest('tr');
+}
+
 describe('Users Add-user partner onboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,7 +163,7 @@ describe('Users Add-user partner onboarding', () => {
     render(<Users />);
     const user = userEvent.setup();
 
-    const row = (await screen.findByText('dattatraya')).closest('tr');
+    const row = await tableRow('dattatraya');
     await user.click(within(row).getAllByRole('button')[0]);
     await screen.findByText('Full name *');
 
@@ -189,7 +196,7 @@ describe('Users Add-user partner onboarding', () => {
     render(<Users />);
     const user = userEvent.setup();
 
-    const row = (await screen.findByText('otheradmin')).closest('tr');
+    const row = await tableRow('otheradmin');
     expect(within(row).getByRole('button', { name: /request approval/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /add user/i }));

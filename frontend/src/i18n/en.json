@@ -10,6 +10,8 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "add": "Add",
+    "more": "More",
     "addEntry": "Add Entry",
     "transactions": "Transactions",
     "customers": "Customers",

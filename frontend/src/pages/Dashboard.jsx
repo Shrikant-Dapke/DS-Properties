@@ -14,7 +14,7 @@ import { PlusCircle, ArrowUpRight, ArrowDownRight, Wallet, Scale } from 'lucide-
 import { dashboardApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.js';
 import { useAuth } from '../hooks/useAuth.js';
-import { formatINR } from '../utils/formatters.js';
+import { formatINR, formatDate, titleCase } from '../utils/formatters.js';
 import { DATE_MODES, financialYearRange } from '../utils/dateRange.js';
 import { canOperate } from '../contexts/authContextDef.js';
 import { LoadingSpinner } from '../components/common/LoadingSpinner.jsx';
@@ -78,11 +78,11 @@ export default function Dashboard() {
   const fy = data?.financialYear || {};
 
   const stats = [
-    { label: 'Current balance', value: formatINR(data?.balance), icon: Wallet, tone: 'text-emerald-700 bg-emerald-50' },
-    { label: `Intakes (${period.from ?? '…'} → ${period.to ?? '…'})`, value: formatINR(period.intake), icon: ArrowUpRight, tone: 'text-emerald-600 bg-emerald-50' },
-    { label: `Outtakes (${period.from ?? '…'} → ${period.to ?? '…'})`, value: formatINR(period.outtake), icon: ArrowDownRight, tone: 'text-red-600 bg-red-50' },
-    { label: 'Net (selected period)', value: formatINR(period.net), icon: Scale, tone: 'text-blue-700 bg-blue-50' },
-    { label: 'Period opening', value: formatINR(period.openingBalance), icon: Wallet, tone: 'text-indigo-700 bg-indigo-50' },
+    { label: 'Current balance', shortLabel: 'Balance', value: formatINR(data?.balance), icon: Wallet, tone: 'text-emerald-700 bg-emerald-50' },
+    { label: `Intakes (${period.from ?? '…'} → ${period.to ?? '…'})`, shortLabel: 'In', value: formatINR(period.intake), icon: ArrowUpRight, tone: 'text-emerald-600 bg-emerald-50' },
+    { label: `Outtakes (${period.from ?? '…'} → ${period.to ?? '…'})`, shortLabel: 'Out', value: formatINR(period.outtake), icon: ArrowDownRight, tone: 'text-red-600 bg-red-50' },
+    { label: 'Net (selected period)', shortLabel: 'Net', value: formatINR(period.net), icon: Scale, tone: 'text-blue-700 bg-blue-50' },
+    { label: 'Period opening', shortLabel: 'Opening', value: formatINR(period.openingBalance), icon: Wallet, tone: 'text-indigo-700 bg-indigo-50' },
   ];
 
   if (loading && !data) return <LoadingSpinner label="Loading dashboard…" />;
@@ -91,7 +91,16 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title={`Welcome, ${user.fullName || user.username}`}
-        subtitle={fy.from && fy.to ? `Financial year ${fy.startYear}–${fy.startYear + 1} (${fy.from} → ${fy.to})` : "Here's what's happening with your finances"}
+        subtitle={
+          fy.from && fy.to ? (
+            <>
+              <span className="hidden sm:inline">{`Financial year ${fy.startYear}–${fy.startYear + 1} (${fy.from} → ${fy.to})`}</span>
+              <span className="sm:hidden">{`FY ${fy.startYear}–${fy.startYear + 1}`}</span>
+            </>
+          ) : (
+            "Here's what's happening with your finances"
+          )
+        }
         actions={
           canOperate(user) && (
             <Link
@@ -118,14 +127,17 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        {stats.map((s) => (
-          <Card key={s.label} pad={false}>
+        {stats.map((s, i) => (
+          <Card key={s.label} pad={false} className={i === 0 ? 'col-span-2 lg:col-span-1' : ''}>
             <div className="p-4">
               <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg ${s.tone}`}>
                 <s.icon className="h-4 w-4" />
               </div>
-              <p className="text-xs text-slate-500">{s.label}</p>
-              <p className="mt-0.5 text-lg font-bold text-slate-800">{s.value}</p>
+              <p className="text-xs text-slate-500">
+                <span className="lg:hidden">{s.shortLabel}</span>
+                <span className="hidden lg:inline">{s.label}</span>
+              </p>
+              <p className={`mt-0.5 font-bold text-slate-800 ${i === 0 ? 'text-2xl lg:text-lg' : 'text-lg'}`}>{s.value}</p>
             </div>
           </Card>
         ))}
@@ -146,13 +158,13 @@ export default function Dashboard() {
           {breakdownRows && breakdownRows.length > 0 ? (
             <ul className="divide-y divide-slate-100">
               {breakdownRows.slice(0, 8).map((c, i) => (
-                <li key={c.public_id ?? c.category_name} className="flex items-center justify-between py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-                    <span className="text-sm text-slate-700">{c.category_name}</span>
-                    <span className="text-xs text-slate-400">×{c.outtake_count}</span>
+                <li key={c.public_id ?? c.category_name} className="flex items-center justify-between gap-2 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
+                    <span className="truncate text-sm text-slate-700">{c.category_name}</span>
+                    <span className="shrink-0 text-xs text-slate-400">×{c.outtake_count}</span>
                   </div>
-                  <span className="text-sm font-semibold text-slate-800">{formatINR(c.total_outtake)}</span>
+                  <span className="shrink-0 text-sm font-semibold text-slate-800">{formatINR(c.total_outtake)}</span>
                 </li>
               ))}
             </ul>
@@ -166,43 +178,43 @@ export default function Dashboard() {
         <Card title="Recent activity" className="mt-5" actions={<Link to="/transactions" className="text-xs font-medium text-emerald-700 hover:underline">View all</Link>}>
           <ul className="divide-y divide-slate-100">
             {data.recentTransactions.map((t) => (
-              <li
-                key={t.public_id}
-                onClick={() => navigate('/transactions')}
-                className="flex cursor-pointer items-center justify-between py-2.5 hover:bg-slate-50"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                      t.transaction_type === 'intake' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {t.transaction_type === 'intake' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">
-                      {t.description || (t.transaction_type === 'intake' ? 'Intake' : 'Outtake')}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {t.transaction_date} · {t.source_type}
-                    </p>
+                <li
+                  key={t.public_id}
+                  onClick={() => navigate('/transactions')}
+                  className="flex cursor-pointer items-center justify-between gap-3 py-2.5 hover:bg-slate-50"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                        t.transaction_type === 'intake' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {t.transaction_type === 'intake' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {t.description || (t.transaction_type === 'intake' ? 'Intake' : 'Outtake')}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {formatDate(t.transaction_date)} · {titleCase(t.source_type)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <span className={`text-sm font-bold ${t.transaction_type === 'intake' ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {t.transaction_type === 'intake' ? '+' : '−'}{formatINR(t.amount)}
-                </span>
-              </li>
+                  <span className={`shrink-0 text-sm font-bold ${t.transaction_type === 'intake' ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {t.transaction_type === 'intake' ? '+' : '−'}{formatINR(t.amount)}
+                  </span>
+                </li>
             ))}
           </ul>
         </Card>
       )}
 
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+      <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
         All-time totals: {formatINR(totals.totalIntake)} in · {formatINR(totals.totalOuttake)} out
         {totals.customerIntake > 0 && ` · ₹${Number(totals.customerIntake).toLocaleString('en-IN')} from customers`}
         {totals.partnerCapital > 0 && ` · ₹${Number(totals.partnerCapital).toLocaleString('en-IN')} partner capital`}
         {totals.partnerLoan > 0 && ` · ₹${Number(totals.partnerLoan).toLocaleString('en-IN')} partner loans`}
-        <span className="ml-auto text-slate-400">Aggregates are cached server-side and refresh on entry changes.</span>
+        <span className="basis-full text-slate-400 sm:ml-auto sm:basis-auto">Aggregates are cached server-side and refresh on entry changes.</span>
       </div>
     </div>
   );

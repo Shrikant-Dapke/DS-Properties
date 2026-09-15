@@ -254,7 +254,7 @@ export default function AddEntry() {
             </button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {!isOuttake && (
               <>
                 <Select label="Source" id="sourceType" value={form.sourceType} onChange={set('sourceType')}>
@@ -285,7 +285,7 @@ export default function AddEntry() {
                   </Select>
                 )}
                 {isCustomer && loadErrors.customers && (
-                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                  <div className="col-span-full text-xs font-medium text-red-600" role="alert">
                     Could not load customers.{' '}
                     <button type="button" className="underline" onClick={reloadOptions}>
                       Retry
@@ -293,7 +293,7 @@ export default function AddEntry() {
                   </div>
                 )}
                 {isCustomer && !loadErrors.customers && activeCustomers.length === 0 && (
-                  <div className="col-span-2 text-xs text-slate-500">
+                  <div className="col-span-full text-xs text-slate-500">
                     No customers yet.{' '}
                     <Link to="/customers" className="font-medium text-emerald-700 hover:underline">
                       Add a customer
@@ -301,7 +301,7 @@ export default function AddEntry() {
                   </div>
                 )}
                 {needsPartner && loadErrors.partners && (
-                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                  <div className="col-span-full text-xs font-medium text-red-600" role="alert">
                     Could not load partners.{' '}
                     <button type="button" className="underline" onClick={reloadOptions}>
                       Retry
@@ -309,7 +309,7 @@ export default function AddEntry() {
                   </div>
                 )}
                 {needsPartner && !loadErrors.partners && activePartners.length === 0 && (
-                  <div className="col-span-2 text-xs text-slate-500">
+                  <div className="col-span-full text-xs text-slate-500">
                     No partners yet.{' '}
                     <Link to="/partners" className="font-medium text-emerald-700 hover:underline">
                       Add a partner
@@ -319,7 +319,7 @@ export default function AddEntry() {
               </>
             )}
 
-            <Input label="Amount (₹)" id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} placeholder="0.00" required />
+            <Input label="Amount (₹)" id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} placeholder="0.00" inputClassName="text-lg font-semibold" required />
 
             <Select label="Payment mode" id="paymentMode" value={form.paymentMode} onChange={set('paymentMode')}>
               {PAYMENT_MODES.map((m) => (
@@ -343,7 +343,7 @@ export default function AddEntry() {
                 </Select>
                 <Input label="Paid to" id="paidTo" value={form.paidTo} onChange={set('paidTo')} placeholder="Payee name" required />
                 {loadErrors.categories && (
-                  <div className="col-span-2 text-xs font-medium text-red-600" role="alert">
+                  <div className="col-span-full text-xs font-medium text-red-600" role="alert">
                     Could not load categories.{' '}
                     <button type="button" className="underline" onClick={reloadOptions}>
                       Retry
@@ -351,7 +351,7 @@ export default function AddEntry() {
                   </div>
                 )}
                 {!loadErrors.categories && categories.length === 0 && (
-                  <div className="col-span-2 text-xs text-slate-500">
+                  <div className="col-span-full text-xs text-slate-500">
                     No categories yet.{' '}
                     <Link to="/categories" className="font-medium text-emerald-700 hover:underline">
                       Add a category
@@ -366,7 +366,7 @@ export default function AddEntry() {
             <Input label="Description" id="description" value={form.description} onChange={set('description')} placeholder="Optional note" />
           </div>
 
-          <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
+          <div className="mt-4 flex flex-col gap-3 rounded-lg bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
             <span className="text-xs text-slate-500">
               {isOuttake ? (
                 <>Category missing? <Link to="/categories" className="font-medium text-emerald-700 hover:underline">Manage categories</Link></>
@@ -376,7 +376,7 @@ export default function AddEntry() {
                 <>Partner not listed? <Link to="/partners" className="font-medium text-emerald-700 hover:underline">Add a partner</Link></>
               )}
             </span>
-            <Button type="submit" variant={isOuttake ? 'danger' : 'primary'} loading={loading}>
+            <Button type="submit" variant={isOuttake ? 'danger' : 'primary'} loading={loading} className="min-h-[48px] w-full md:w-auto">
               {editId ? 'Update entry' : 'Save entry'}
             </Button>
           </div>

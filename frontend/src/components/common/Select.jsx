@@ -8,7 +8,7 @@ export function Select({ label, error, className = '', id, children, ...props })
       )}
       <select
         id={id}
-        className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+        className={`min-h-[48px] w-full rounded-lg border bg-white px-3 py-3 text-base focus:outline-none focus:ring-2 md:min-h-0 md:py-2 md:text-sm ${
           error
             ? 'border-red-300 focus:ring-red-400'
             : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-400'

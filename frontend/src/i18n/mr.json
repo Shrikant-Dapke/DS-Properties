@@ -10,6 +10,8 @@
   },
   "nav": {
     "dashboard": "डॅशबोर्ड",
+    "add": "जोडा",
+    "more": "अधिक",
     "addEntry": "नोंद दाखल करा",
     "transactions": "व्यवहार",
     "customers": "ग्राहक",

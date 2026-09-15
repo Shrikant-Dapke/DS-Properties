@@ -280,7 +280,46 @@ export default function Users() {
       />
 
       <Card pad={false}>
-        <DataTable columns={columns} rows={rows} loading={loading} emptyMessage="No users yet." />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          emptyMessage="No users yet."
+          renderCard={(r) => (
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-800">{r.username}</p>
+                  {r.fullName && <p className="truncate text-xs text-slate-500">{r.fullName}</p>}
+                </div>
+                {r.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="red">Disabled</Badge>}
+              </div>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                <Badge tone={r.role === 'admin' ? 'indigo' : r.role === 'partner' ? 'emerald' : r.role === 'developer' ? 'amber' : 'slate'}>
+                  {ROLE_LABELS[r.role] || r.role}
+                </Badge>
+                {r.partner?.name && <span className="truncate">as {r.partner.name}</span>}
+                <span>Last login: {r.lastLoginAt ? formatDateTime(r.lastLoginAt) : 'Never'}</span>
+              </p>
+              {!(r.role === 'developer' && !isDeveloper(me)) && (
+                <div className="mt-2 flex flex-wrap gap-1 border-t border-slate-100 pt-2 [&_button]:min-h-[44px]">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(r)} aria-label={`Edit ${r.username}`}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setResetting(r); setNewPassword(''); }} aria-label={`Reset password for ${r.username}`}>
+                    <KeyRound className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => toggleActive(r)}>
+                    {proposing ? 'Request approval' : (r.isActive ? 'Disable' : 'Enable')}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)} aria-label={`Delete ${r.username}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        />
       </Card>
 
       <Modal
@@ -298,7 +337,7 @@ export default function Users() {
           </>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Input
             label="Username *"
             value={form.username}
@@ -336,7 +375,7 @@ export default function Users() {
             </Select>
           )}
           {!editing && form.role === ROLES.PARTNER && partnerMode === 'select' && (
-            <div className="sm:col-span-2 -mt-2">
+            <div className="md:col-span-2 -mt-2">
               <button
                 type="button"
                 onClick={() => setPartnerMode('create')}
@@ -347,7 +386,7 @@ export default function Users() {
             </div>
           )}
           {!editing && form.role === ROLES.PARTNER && partnerMode === 'create' && (
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-700">New partner record</p>
                 <button
@@ -358,7 +397,7 @@ export default function Users() {
                   Use existing instead
                 </button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 <Input
                   label="Partner name *"
                   value={newPartner.name}
@@ -383,7 +422,7 @@ export default function Users() {
                 />
                 <Input
                   label="Notes"
-                  className="sm:col-span-2"
+                  className="md:col-span-2"
                   value={newPartner.notes}
                   onChange={(e) => setNewPartner((p) => ({ ...p, notes: e.target.value }))}
                 />

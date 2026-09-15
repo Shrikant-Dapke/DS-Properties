@@ -100,7 +100,7 @@ export function DateRangeFilter({
                 type="date"
                 value={customFrom}
                 onChange={(e) => { setCustomFrom(e.target.value); setTouched(true); }}
-                className={`rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                className={`rounded-lg border bg-white px-3 py-3 text-base focus:outline-none focus:ring-2 md:py-2 md:text-sm ${
                   invalid
                     ? 'border-red-300 focus:ring-red-400'
                     : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-400'
@@ -116,7 +116,7 @@ export function DateRangeFilter({
                 type="date"
                 value={customTo}
                 onChange={(e) => { setCustomTo(e.target.value); setTouched(true); }}
-                className={`rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                className={`rounded-lg border bg-white px-3 py-3 text-base focus:outline-none focus:ring-2 md:py-2 md:text-sm ${
                   invalid
                     ? 'border-red-300 focus:ring-red-400'
                     : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-400'

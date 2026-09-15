@@ -151,7 +151,34 @@ export default function Categories() {
       />
 
       <Card pad={false}>
-        <DataTable columns={columns} rows={rows} loading={loading} emptyMessage="No categories yet." />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          emptyMessage="No categories yet."
+          renderCard={(r) => (
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-slate-800">{r.name}</p>
+                {r.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="slate">Inactive</Badge>}
+              </div>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                {r.slug && <code className="rounded bg-slate-100 px-1.5 py-0.5">{r.slug}</code>}
+                {r.description && <span className="min-w-0 flex-1 truncate">{r.description}</span>}
+              </p>
+              {canOperate(user) && (
+                <div className="mt-2 flex gap-1 border-t border-slate-100 pt-2 [&_button]:min-h-[44px]">
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(r)} aria-label={`Edit ${r.name}`}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleting(r)} aria-label={`Delete ${r.name}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        />
       </Card>
 
       <Modal
@@ -169,7 +196,7 @@ export default function Categories() {
           </>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Input label="Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
           <Input
             label="Slug"
@@ -179,7 +206,7 @@ export default function Categories() {
           />
           <Input
             label="Description"
-            className="sm:col-span-2"
+            className="md:col-span-2"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           />

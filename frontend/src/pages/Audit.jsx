@@ -123,7 +123,41 @@ export default function Audit() {
       </Card>
 
       <Card pad={false}>
-        <DataTable columns={columns} rows={rows} loading={loading} emptyMessage="No audit entries match." />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          emptyMessage="No audit entries match."
+          renderCard={(r) => {
+            const changed = [];
+            if (r.new_values) {
+              const parsed = typeof r.new_values === 'string' ? JSON.parse(r.new_values) : r.new_values;
+              changed.push(...Object.keys(parsed));
+            }
+            if (r.old_values) {
+              const parsed = typeof r.old_values === 'string' ? JSON.parse(r.old_values) : r.old_values;
+              for (const k of Object.keys(parsed)) {
+                if (!changed.includes(k)) changed.push(k);
+              }
+            }
+            return (
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Badge tone="blue">{titleCase(r.domain)}</Badge>
+                    <span className="truncate text-sm font-medium text-slate-800">{titleCase(r.action)}</span>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-400">{formatDateTime(r.created_at)}</span>
+                </div>
+                <p className="mt-1 truncate text-xs text-slate-500">
+                  {r.user_username || 'system'}
+                  {r.record_id ? ` · ${r.record_id}` : ''}
+                  {changed.length > 0 ? ` · ${changed.join(', ')}` : ''}
+                </p>
+              </div>
+            );
+          }}
+        />
         <Pagination page={page} totalPages={totalPages} onPageChange={(p) => { setPage(p); load(p); }} />
       </Card>
     </div>

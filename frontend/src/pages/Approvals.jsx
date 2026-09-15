@@ -197,6 +197,37 @@ export default function Approvals() {
     }
   };
 
+  // Row actions shared by the desktop table and the mobile card: Details
+  // always, Approve/Reject only when the server says this viewer can decide.
+  const renderActions = (r) => {
+    const decided = myDecision[r.publicId];
+    const canDecide = canDecideRow(r);
+    const mine = isRequester(r);
+    return (
+      <>
+        {mine && (
+          <span className="mr-1 self-center text-xs font-medium text-slate-400">{t('approvals.yourRequest')}</span>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => setDetail(r)}>
+          <Eye className="h-3.5 w-3.5" /> {t('common.details')}
+        </Button>
+        {canDecide && (
+          <>
+            <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => openDecide(r, 'approve')}>
+              <Check className="h-3.5 w-3.5" /> {t('approvals.approve')}
+            </Button>
+            <Button variant="ghost" size="sm" className="text-red-600" onClick={() => openDecide(r, 'reject')}>
+              <X className="h-3.5 w-3.5" /> {t('approvals.reject')}
+            </Button>
+          </>
+        )}
+        {decided && (
+          <span className="text-xs font-medium text-slate-400">{t('approvals.decidedByYou')}</span>
+        )}
+      </>
+    );
+  };
+
   const columns = [
     {
       key: 'entityType',
@@ -242,36 +273,33 @@ export default function Approvals() {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (r) => {
-        const decided = myDecision[r.publicId];
-        const canDecide = canDecideRow(r);
-        const mine = isRequester(r);
-        return (
-          <div className="flex justify-end gap-1">
-            {mine && (
-              <span className="mr-1 self-center text-xs font-medium text-slate-400">{t('approvals.yourRequest')}</span>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => setDetail(r)}>
-              <Eye className="h-3.5 w-3.5" /> {t('common.details')}
-            </Button>
-            {canDecide && (
-              <>
-                <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => openDecide(r, 'approve')}>
-                  <Check className="h-3.5 w-3.5" /> {t('approvals.approve')}
-                </Button>
-                <Button variant="ghost" size="sm" className="text-red-600" onClick={() => openDecide(r, 'reject')}>
-                  <X className="h-3.5 w-3.5" /> {t('approvals.reject')}
-                </Button>
-              </>
-            )}
-            {decided && (
-              <span className="text-xs font-medium text-slate-400">{t('approvals.decidedByYou')}</span>
-            )}
-          </div>
-        );
-      },
+      render: (r) => <div className="flex justify-end gap-1">{renderActions(r)}</div>,
     },
   ];
+
+  const approvalCard = (r) => {
+    const approved = (r.approvals || []).filter((a) => a.status === 'APPROVED').length;
+    const required = (r.requiredApprovers || []).length;
+    return (
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge tone="blue">{t(`operation.${r.operation}`)}</Badge>
+            <span className="truncate text-sm font-medium text-slate-800">{t(`entity.${r.entityType}`)}</span>
+          </div>
+          <Badge tone={STATUS_TONE[r.status] || 'slate'}>{t(`status.${r.status.toLowerCase()}`)}</Badge>
+        </div>
+        <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+          <span>{t('approvals.requester')}: <span className="font-medium text-slate-700">{requesterName(r)}</span></span>
+          <span>{t('approvals.progress')}: {approved}/{required}</span>
+          <span>{formatDateTime(r.createdAt)}</span>
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-2 [&_button]:min-h-[44px]">
+          {renderActions(r)}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -296,6 +324,7 @@ export default function Approvals() {
               variant="primary"
               onClick={() => setBulk({ decision: 'approve' })}
               disabled={bulkSubmitting}
+              className="min-h-[44px]"
             >
               <Check className="h-3.5 w-3.5" /> {t('approvals.bulkApprove')}
             </Button>
@@ -303,6 +332,7 @@ export default function Approvals() {
               variant="danger"
               onClick={() => setBulk({ decision: 'reject' })}
               disabled={bulkSubmitting}
+              className="min-h-[44px]"
             >
               <X className="h-3.5 w-3.5" /> {t('approvals.bulkReject')}
             </Button>
@@ -314,7 +344,7 @@ export default function Approvals() {
         {!loading && rows.length === 0 ? (
           <EmptyState icon={ShieldCheck} title={t('approvals.empty')} />
         ) : (
-          <DataTable columns={columns} rows={rows} loading={loading} emptyMessage={t('approvals.empty')} />
+          <DataTable columns={columns} rows={rows} loading={loading} emptyMessage={t('approvals.empty')} renderCard={approvalCard} />
         )}
       </Card>
 
@@ -330,7 +360,7 @@ export default function Approvals() {
       >
         {detail && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-slate-500">{t('approvals.entityType')}</p>
                 <p className="font-medium text-slate-800">{t(`entity.${detail.entityType}`)}</p>

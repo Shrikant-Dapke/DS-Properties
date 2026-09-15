@@ -171,7 +171,7 @@ export default function Transactions() {
       />
 
       <Card className="mb-4" pad={false}>
-        <form onSubmit={applyFilters} className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
+        <form onSubmit={applyFilters} className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-6">
           <Input label="Search" placeholder="Description / ref / plot" value={filters.q} onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))} />
           <Select label="Type" value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
             <option value="">All</option>
@@ -186,7 +186,7 @@ export default function Transactions() {
               </option>
             ))}
           </Select>
-          <div className="sm:col-span-2 lg:col-span-3">
+          <div className="md:col-span-2 lg:col-span-3">
             <DateRangeFilter
               key={rangeResetKey}
               defaultMode={DATE_MODES.CUSTOM}
@@ -194,9 +194,9 @@ export default function Transactions() {
               onChange={applyRange}
             />
           </div>
-          <div className="flex items-end gap-2">
-            <Button type="submit">Filter</Button>
-            <Button type="button" variant="ghost" onClick={resetFilters}>
+          <div className="flex items-end gap-2 md:col-span-2 lg:col-span-1">
+            <Button type="submit" className="min-h-[48px] flex-1 md:min-h-0 md:flex-none">Filter</Button>
+            <Button type="button" variant="ghost" onClick={resetFilters} className="min-h-[48px] flex-1 md:min-h-0 md:flex-none">
               Reset
             </Button>
           </div>
@@ -204,7 +204,39 @@ export default function Transactions() {
       </Card>
 
       <Card pad={false}>
-        <DataTable columns={columns} rows={rows} loading={loading} onRowClick={setSelected} emptyMessage="Try adjusting the filters." />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          onRowClick={setSelected}
+          emptyMessage="Try adjusting the filters."
+          renderCard={(r) => (
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {r.isReversal ? (
+                    <Badge tone="amber">Reversal</Badge>
+                  ) : r.transactionType === TRANSACTION_TYPES.INTAKE ? (
+                    <Badge tone="green">Intake</Badge>
+                  ) : (
+                    <Badge tone="red">Outtake</Badge>
+                  )}
+                  <span className="truncate text-xs text-slate-500">{formatDate(r.transactionDate)}</span>
+                </div>
+                <span className={`shrink-0 text-sm font-bold ${r.transactionType === 'intake' ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {r.transactionType === 'intake' ? '+' : '−'}{formatINR(r.amount)}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-sm font-medium text-slate-800">
+                {r.description || r.paidTo || r.customer?.name || r.partner?.name || '—'}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                {SOURCE_LABELS[r.sourceType] || titleCase(r.sourceType) || '—'}
+                {(r.runningBalance ?? r.balance) != null && ` · Bal ${formatINR(r.runningBalance ?? r.balance)}`}
+              </p>
+            </div>
+          )}
+        />
         <Pagination page={page} totalPages={totalPages} onPageChange={(p) => { setPage(p); load(p); }} />
       </Card>
 
@@ -236,7 +268,7 @@ export default function Transactions() {
             </>
           }
         >
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs text-slate-500">Date</dt>
               <dd className="font-medium">{formatDate(selected.transactionDate)}</dd>
@@ -291,12 +323,12 @@ export default function Transactions() {
                 <dd className="font-medium">{selected.category.name}</dd>
               </div>
             )}
-            <div className="col-span-2">
+            <div className="col-span-full">
               <dt className="text-xs text-slate-500">Description</dt>
               <dd className="font-medium">{selected.description || '—'}</dd>
             </div>
             {selected.reversalReason && (
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <dt className="text-xs text-slate-500">Reversal reason</dt>
                 <dd className="font-medium text-amber-700">{selected.reversalReason}</dd>
               </div>

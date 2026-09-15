@@ -35,7 +35,10 @@ export function formatNumber(value) {
 
 export function formatDate(value) {
   if (!value) return '—';
-  const date = new Date(`${value}T00:00:00`);
+  const text = String(value);
+  // Date-only values parse as local midnight (no UTC day-shift); full
+  // ISO datetimes parse as-is. Anything unparseable falls back to raw text.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00`) : new Date(text);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(getLocale(), { day: '2-digit', month: 'short', year: 'numeric' });
 }

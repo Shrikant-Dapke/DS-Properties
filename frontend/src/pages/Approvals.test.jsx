@@ -49,6 +49,18 @@ function renderAs(user) {
   return render(<Approvals />);
 }
 
+// Rows render twice in jsdom (mobile card + desktop table, CSS-hidden in a
+// real browser): scope row lookups to the desktop table.
+async function tableRow(text) {
+  const table = await screen.findByRole('table');
+  return within(table).getByText(text).closest('tr');
+}
+
+async function tableText(text) {
+  const table = await screen.findByRole('table');
+  return within(table).getByText(text);
+}
+
 describe('Approvals decision visibility (server-derived)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,9 +70,9 @@ describe('Approvals decision visibility (server-derived)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 3, username: 'pta', role: 'partner' });
 
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
-    expect(screen.getByText('approvals.yourRequest')).toBeInTheDocument();
+    expect(within(row).getByText('approvals.yourRequest')).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
   });
@@ -72,7 +84,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     });
     renderAs({ id: 4, username: 'ptb', role: 'partner' });
 
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /approvals.approve/i })).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /approvals.reject/i })).toBeInTheDocument();
@@ -83,7 +95,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 9, username: 'stranger', role: 'partner' });
 
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
@@ -93,7 +105,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 1, username: 'admin', role: 'admin' });
 
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
@@ -112,9 +124,9 @@ describe('Approvals decision visibility (server-derived)', () => {
     });
     renderAs({ id: 4, username: 'ptb', role: 'partner' });
 
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
-    expect(screen.getByText('approvals.decidedByYou')).toBeInTheDocument();
+    expect(within(row).getByText('approvals.decidedByYou')).toBeInTheDocument();
   });
 
   it('partner-governed user request: eligible partner decides, admin is view-only', async () => {
@@ -126,7 +138,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     // Eligible partner reviewer gets controls.
     changeRequestApi.list.mockResolvedValue({ rows: [userRequest(true)], pagination: {} });
     const { unmount } = renderAs({ id: 4, username: 'ptb', role: 'partner' });
-    const row = (await screen.findByText('#3')).closest('tr');
+    const row = await tableRow('#3');
     expect(within(row).getByRole('button', { name: /approvals.approve/i })).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /approvals.reject/i })).toBeInTheDocument();
     unmount();
@@ -134,7 +146,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     // Same request, admin viewer without decision power: Details only.
     changeRequestApi.list.mockResolvedValue({ rows: [userRequest(false)], pagination: {} });
     renderAs({ id: 1, username: 'admin', role: 'admin' });
-    const adminRow = (await screen.findByText('#3')).closest('tr');
+    const adminRow = await tableRow('#3');
     expect(within(adminRow).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
     expect(within(adminRow).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(adminRow).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
@@ -148,8 +160,8 @@ describe('Approvals decision visibility (server-derived)', () => {
       pagination: {},
     });
     renderAs({ id: 99, username: 'someone-else', role: 'partner' });
-    const row = (await screen.findByText('#3')).closest('tr');
-    expect(screen.getByText('approvals.yourRequest')).toBeInTheDocument();
+    const row = await tableRow('#3');
+    expect(within(row).getByText('approvals.yourRequest')).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
   });
@@ -158,7 +170,7 @@ describe('Approvals decision visibility (server-derived)', () => {
     userApi.list.mockResolvedValue({ rows: [{ id: 3, username: 'dattatraya' }] });
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 9, username: 'stranger', role: 'partner' });
-    const row = (await screen.findByText('dattatraya')).closest('tr');
+    const row = await tableRow('dattatraya');
     expect(within(row).queryByText('#3')).not.toBeInTheDocument();
   });
 });
@@ -196,7 +208,7 @@ describe('Approvals bulk actions (Approve All / Reject All)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 9, username: 'stranger', role: 'partner' });
 
-    await screen.findByText('common.details');
+    await tableText('common.details');
     expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
     expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
   });
@@ -205,7 +217,7 @@ describe('Approvals bulk actions (Approve All / Reject All)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 3, username: 'pta', role: 'partner' });
 
-    await screen.findByText('approvals.yourRequest');
+    await tableText('approvals.yourRequest');
     expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
     expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
   });
@@ -214,7 +226,7 @@ describe('Approvals bulk actions (Approve All / Reject All)', () => {
     changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
     renderAs({ id: 1, username: 'admin', role: 'admin' });
 
-    await screen.findByText('common.details');
+    await tableText('common.details');
     expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
     expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
   });

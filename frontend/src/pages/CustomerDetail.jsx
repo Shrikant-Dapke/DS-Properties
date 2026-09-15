@@ -100,7 +100,24 @@ export default function CustomerDetail() {
       </Card>
 
       <Card title="Ledger" subtitle="This customer's transactions" pad={false}>
-        <DataTable columns={columns} rows={rows} emptyMessage="No transactions yet." />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          emptyMessage="No transactions yet."
+          renderCard={(r) => (
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-slate-800">{r.description || r.reference_number || '—'}</p>
+                <span className={`shrink-0 text-sm font-bold ${r.transaction_type === 'intake' ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {r.transaction_type === 'intake' ? '+' : '−'}{formatINR(r.amount)}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                {formatDate(r.transaction_date)}{r.payment_mode ? ` · ${r.payment_mode.replace('_', ' ')}` : ''}
+              </p>
+            </div>
+          )}
+        />
         <Pagination page={page} totalPages={totalPages} onPageChange={loadLedger} />
       </Card>
     </div>

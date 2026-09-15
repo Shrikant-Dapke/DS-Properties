@@ -163,7 +163,7 @@ export default function Customers() {
         )}
       />
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Input
           placeholder="Search by name, phone or email"
           value={q}
@@ -174,9 +174,9 @@ export default function Customers() {
               load(1, q);
             }
           }}
-          className="max-w-xs"
+          className="sm:max-w-xs"
         />
-        <Button variant="secondary" onClick={() => { setPage(1); load(1, q); }}>
+        <Button variant="secondary" onClick={() => { setPage(1); load(1, q); }} className="min-h-[48px] md:min-h-0">
           Search
         </Button>
       </div>
@@ -188,6 +188,23 @@ export default function Customers() {
           loading={loading}
           onRowClick={(r) => navigate(`/customers/${r.publicId}`)}
           emptyMessage="No customers found."
+          renderCard={(r) => (
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-800">{r.name}</p>
+                {r.email && <p className="truncate text-xs text-slate-500">{r.email}</p>}
+                <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                  {r.phone && <span>{r.phone}</span>}
+                  {r.address && <span className="truncate">{r.address}</span>}
+                  <span>Since {formatDate(r.createdAt)}</span>
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-semibold text-slate-800">{formatINR(r.totalPaid)}</span>
+                <span className="text-slate-300">›</span>
+              </div>
+            </div>
+          )}
         />
         <Pagination page={page} totalPages={totalPages} onPageChange={(p) => { setPage(p); load(p); }} />
       </Card>
@@ -208,14 +225,14 @@ export default function Customers() {
           </>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Input label="Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
           <Input label="Phone" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           <Input label="Address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
           <Input
             label="Notes"
-            className="sm:col-span-2"
+            className="md:col-span-2"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
           />
