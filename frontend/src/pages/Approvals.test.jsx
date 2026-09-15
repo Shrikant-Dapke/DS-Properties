@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import Approvals from './Approvals.jsx';
 
 vi.mock('../api/changeRequestApi.js', () => ({
-  changeRequestApi: { list: vi.fn(), approve: vi.fn(), reject: vi.fn() },
+  changeRequestApi: { list: vi.fn(), approve: vi.fn(), reject: vi.fn(), bulkApprove: vi.fn(), bulkReject: vi.fn() },
 }));
 
 vi.mock('../api/endpoints.js', () => ({
@@ -160,5 +160,120 @@ describe('Approvals decision visibility (server-derived)', () => {
     renderAs({ id: 9, username: 'stranger', role: 'partner' });
     const row = (await screen.findByText('dattatraya')).closest('tr');
     expect(within(row).queryByText('#3')).not.toBeInTheDocument();
+  });
+});
+
+describe('Approvals bulk actions (Approve All / Reject All)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const actionableRow = (publicId, overrides = {}) =>
+    crRow({ publicId, viewerCanDecide: true, ...overrides });
+
+  async function openBulkDialog(label, title) {
+    fireEvent.click(await screen.findByText(label));
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    return within(screen.getByRole('dialog')).getByRole('button', { name: label });
+  }
+
+  it('shows bulk actions when the viewer can decide pending requests', async () => {
+    changeRequestApi.list.mockResolvedValue({
+      rows: [actionableRow('cr-1'), actionableRow('cr-2')],
+      pagination: {},
+    });
+    changeRequestApi.bulkApprove.mockResolvedValue({ decision: 'approve', total: 2, succeeded: 2, failed: 0, results: [] });
+    renderAs({ id: 4, username: 'ptb', role: 'partner' });
+
+    const confirm = await openBulkDialog('approvals.bulkApprove', 'approvals.bulkApproveTitle');
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(changeRequestApi.bulkApprove).toHaveBeenCalledWith(['cr-1', 'cr-2']));
+    await waitFor(() => expect(changeRequestApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('hides bulk actions when nothing is actionable', async () => {
+    changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
+    renderAs({ id: 9, username: 'stranger', role: 'partner' });
+
+    await screen.findByText('common.details');
+    expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
+    expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
+  });
+
+  it('requester with only their own request sees no bulk actions', async () => {
+    changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
+    renderAs({ id: 3, username: 'pta', role: 'partner' });
+
+    await screen.findByText('approvals.yourRequest');
+    expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
+    expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
+  });
+
+  it('admin sees no bulk actions on partner-governed requests', async () => {
+    changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
+    renderAs({ id: 1, username: 'admin', role: 'admin' });
+
+    await screen.findByText('common.details');
+    expect(screen.queryByText('approvals.bulkApprove')).not.toBeInTheDocument();
+    expect(screen.queryByText('approvals.bulkReject')).not.toBeInTheDocument();
+  });
+
+  it('bulk set excludes rows the viewer cannot decide', async () => {
+    changeRequestApi.list.mockResolvedValue({
+      rows: [
+        actionableRow('cr-1'),
+        crRow({ publicId: 'cr-2', viewerIsRequester: false, viewerCanDecide: false }),
+        crRow({ publicId: 'cr-3', viewerCanDecide: false }),
+      ],
+      pagination: {},
+    });
+    changeRequestApi.bulkApprove.mockResolvedValue({ decision: 'approve', total: 1, succeeded: 1, failed: 0, results: [] });
+    renderAs({ id: 4, username: 'ptb', role: 'partner' });
+
+    const confirm = await openBulkDialog('approvals.bulkApprove', 'approvals.bulkApproveTitle');
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(changeRequestApi.bulkApprove).toHaveBeenCalledWith(['cr-1']));
+  });
+
+  it('Reject All processes every actionable request after confirmation', async () => {
+    changeRequestApi.list.mockResolvedValue({
+      rows: [actionableRow('cr-1'), actionableRow('cr-2')],
+      pagination: {},
+    });
+    changeRequestApi.bulkReject.mockResolvedValue({ decision: 'reject', total: 2, succeeded: 2, failed: 0, results: [] });
+    renderAs({ id: 4, username: 'ptb', role: 'partner' });
+
+    const confirm = await openBulkDialog('approvals.bulkReject', 'approvals.bulkRejectTitle');
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(changeRequestApi.bulkReject).toHaveBeenCalledWith(['cr-1', 'cr-2']));
+    await waitFor(() => expect(changeRequestApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('partial bulk failure still refreshes the queue', async () => {
+    changeRequestApi.list.mockResolvedValue({
+      rows: [actionableRow('cr-1'), actionableRow('cr-2')],
+      pagination: {},
+    });
+    changeRequestApi.bulkApprove.mockResolvedValue({
+      decision: 'approve',
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [
+        { publicId: 'cr-1', ok: true, status: 'APPROVED' },
+        { publicId: 'cr-2', ok: false, code: 'ALREADY_RESOLVED', message: 'Change request is already resolved' },
+      ],
+    });
+    renderAs({ id: 4, username: 'ptb', role: 'partner' });
+
+    const confirm = await openBulkDialog('approvals.bulkApprove', 'approvals.bulkApproveTitle');
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(changeRequestApi.bulkApprove).toHaveBeenCalledWith(['cr-1', 'cr-2']));
+    await waitFor(() => expect(changeRequestApi.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('approvals.bulkApproveTitle')).not.toBeInTheDocument());
   });
 });

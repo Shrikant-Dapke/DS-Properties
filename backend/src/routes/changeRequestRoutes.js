@@ -4,12 +4,14 @@ import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { ROLES } from '../config/constants.js';
 import { publicIdParamSchema } from '../validators/common.js';
-import { decisionBodySchema, cancelBodySchema } from '../validators/governanceValidators.js';
+import { decisionBodySchema, cancelBodySchema, bulkDecisionBodySchema } from '../validators/governanceValidators.js';
 import {
   listChangeRequests,
   getChangeRequest,
   approveChangeHandler,
   rejectChangeHandler,
+  bulkApproveHandler,
+  bulkRejectHandler,
   cancelChangeHandler,
 } from '../controllers/changeRequestController.js';
 
@@ -22,6 +24,10 @@ const router = Router();
 router.use(authenticate, authorize(ROLES.ADMIN, ROLES.PARTNER, ROLES.DEVELOPER));
 
 router.get('/', listChangeRequests);
+// Bulk decision routes precede '/:id' so the static segments can never be
+// captured as a request id.
+router.post('/bulk-approve', validate(bulkDecisionBodySchema, 'body'), bulkApproveHandler);
+router.post('/bulk-reject', validate(bulkDecisionBodySchema, 'body'), bulkRejectHandler);
 router.get('/:id', validate(publicIdParamSchema, 'params'), getChangeRequest);
 router.post('/:id/approve', validate(publicIdParamSchema, 'params'), validate(decisionBodySchema, 'body'), approveChangeHandler);
 router.post('/:id/reject', validate(publicIdParamSchema, 'params'), validate(decisionBodySchema, 'body'), rejectChangeHandler);

@@ -101,6 +101,19 @@
     "decidedByYou": "Decided by you",
     "proposedChange": "Proposed change",
     "noPending": "No pending approvals.",
-    "yourRequest": "Your request"
+    "yourRequest": "Your request",
+    "bulkApprove": "Approve All",
+    "bulkReject": "Reject All",
+    "bulkApproveTitle": "Approve all pending requests?",
+    "bulkApproveMessage": "This will approve {{count}} requests that you are authorized to decide on.",
+    "bulkRejectTitle": "Reject all pending requests?",
+    "bulkRejectMessage": "This will reject {{count}} requests that you are authorized to decide on.",
+    "bulkApprovedAll": "Approved {{count}} requests.",
+    "bulkRejectedAll": "Rejected {{count}} requests.",
+    "bulkApprovedPartial": "{{succeeded}} requests approved. {{failed}} could not be processed because their status had already changed.",
+    "bulkRejectedPartial": "{{succeeded}} requests rejected. {{failed}} could not be processed because their status had already changed.",
+    "bulkApprovedNone": "No requests were approved. {{count}} could not be processed.",
+    "bulkRejectedNone": "No requests were rejected. {{count}} could not be processed.",
+    "bulkFailed": "Failed to process the bulk decision."
   }
 }

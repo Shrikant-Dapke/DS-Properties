@@ -55,6 +55,8 @@ export default function Approvals() {
   const [deciding, setDeciding] = useState(null); // { row, decision: 'approve'|'reject' }
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [bulk, setBulk] = useState(null); // { decision: 'approve'|'reject' } | null
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -121,6 +123,41 @@ export default function Approvals() {
     r.status === 'PENDING'
     && (r.viewerCanDecide === true || (r.viewerCanDecide === undefined && isRequiredApprover(r)))
     && !myDecision[r.publicId];
+
+  // Bulk set: exactly the rows the server says this viewer can decide right
+  // now (the same predicate that renders the per-row Approve/Reject buttons).
+  // Merely visible rows are never included; the server re-checks every id.
+  const actionableRows = rows.filter((r) => r.status === 'PENDING' && canDecideRow(r));
+
+  const submitBulk = async () => {
+    if (!bulk || bulkSubmitting) return;
+    const ids = actionableRows.map((r) => r.publicId);
+    if (ids.length === 0) {
+      setBulk(null);
+      return;
+    }
+    setBulkSubmitting(true);
+    try {
+      const data = bulk.decision === 'approve'
+        ? await changeRequestApi.bulkApprove(ids)
+        : await changeRequestApi.bulkReject(ids);
+      const succeeded = data.succeeded ?? 0;
+      const failed = data.failed ?? 0;
+      if (failed === 0) {
+        toast.success(t(bulk.decision === 'approve' ? 'approvals.bulkApprovedAll' : 'approvals.bulkRejectedAll', { count: succeeded }));
+      } else if (succeeded === 0) {
+        toast.error(t(bulk.decision === 'approve' ? 'approvals.bulkApprovedNone' : 'approvals.bulkRejectedNone', { count: failed }));
+      } else {
+        toast.error(t(bulk.decision === 'approve' ? 'approvals.bulkApprovedPartial' : 'approvals.bulkRejectedPartial', { succeeded, failed }));
+      }
+      setBulk(null);
+      load();
+    } catch {
+      toast.error(t('approvals.bulkFailed'));
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
 
   // Requester display only (no authorization effect): prefer the username
   // resolved through the existing user directory, so a resolvable requester
@@ -253,6 +290,24 @@ export default function Approvals() {
           <option value="CANCELLED">{t('status.cancelled')}</option>
           <option value="ALL">{t('common.all')}</option>
         </Select>
+        {!loading && actionableRows.length > 0 && (
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="primary"
+              onClick={() => setBulk({ decision: 'approve' })}
+              disabled={bulkSubmitting}
+            >
+              <Check className="h-3.5 w-3.5" /> {t('approvals.bulkApprove')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => setBulk({ decision: 'reject' })}
+              disabled={bulkSubmitting}
+            >
+              <X className="h-3.5 w-3.5" /> {t('approvals.bulkReject')}
+            </Button>
+          </div>
+        )}
       </div>
 
       <Card pad={false}>
@@ -346,6 +401,17 @@ export default function Approvals() {
           />
         </div>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!bulk}
+        onClose={() => { if (!bulkSubmitting) setBulk(null); }}
+        onConfirm={submitBulk}
+        title={bulk?.decision === 'approve' ? t('approvals.bulkApproveTitle') : t('approvals.bulkRejectTitle')}
+        message={t(bulk?.decision === 'approve' ? 'approvals.bulkApproveMessage' : 'approvals.bulkRejectMessage', { count: actionableRows.length })}
+        confirmLabel={bulk?.decision === 'approve' ? t('approvals.bulkApprove') : t('approvals.bulkReject')}
+        danger={bulk?.decision === 'reject'}
+        loading={bulkSubmitting}
+      />
     </div>
   );
 }

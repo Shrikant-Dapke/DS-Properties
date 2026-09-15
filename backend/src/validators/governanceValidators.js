@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { GOVERNANCE_ENTITY_TYPES, GOVERNANCE_OPERATIONS } from '../config/constants.js';
+import { publicIdSchema } from './common.js';
 import { ValidationError } from '../utils/errors.js';
 
 import {
@@ -113,6 +114,28 @@ export function validateDecision(body) {
 
 export function validateCancel(body) {
   const { value, error } = cancelBodySchemaRaw.validate(body ?? {}, { abortEarly: false, convert: true });
+  if (error) {
+    throw new ValidationError('Validation failed', error.details.map((d) => ({
+      field: d.path.join('.'),
+      message: d.message,
+    })));
+  }
+  return value;
+}
+
+// Bulk decision payload: an explicit list of change-request public ids plus
+// an optional comment applied to each decision. The ids are only a selection
+// hint — per-request authorization is re-checked by governanceService for
+// every item through the standard approve/reject path.
+const bulkDecisionSchema = Joi.object({
+  publicIds: Joi.array().items(publicIdSchema).min(1).max(100).required(),
+  comment: Joi.string().trim().max(1000).allow('').allow(null).optional(),
+});
+
+export const bulkDecisionBodySchema = bulkDecisionSchema;
+
+export function validateBulkDecision(body) {
+  const { value, error } = bulkDecisionSchema.validate(body ?? {}, { abortEarly: false, convert: true });
   if (error) {
     throw new ValidationError('Validation failed', error.details.map((d) => ({
       field: d.path.join('.'),

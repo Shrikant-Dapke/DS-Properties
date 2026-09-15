@@ -837,6 +837,48 @@ export async function rejectChange(publicId, adminUser, comment, ctx) {
   return { changeRequest: await getChangeRequestByPublicId(publicId), entity: null };
 }
 
+// ---------------------------------------------------------------------------
+// Bulk decisions (Approve All / Reject All UX)
+// ---------------------------------------------------------------------------
+// Processes each requested id independently through the standard single-item
+// approve/reject path above — including loadPending()'s frozen-snapshot
+// membership, active-partner, and duplicate checks — so bulk decisions carry
+// exactly the same authorization, exactly-once, finalization, and audit
+// behavior as individual decisions. The caller's id list is only a selection
+// hint: any client-supplied decision-eligibility flag is never accepted and
+// never trusted here. Items are handled sequentially with no wrapping
+// transaction, so one item's failure (e.g. already decided by someone else)
+// never rolls back the others; every outcome is reported per item.
+export async function bulkDecide({ publicIds, decision, comment, adminUser, ctx }) {
+  if (decision !== 'approve' && decision !== 'reject') {
+    throw new ValidationError('Unsupported bulk decision');
+  }
+  const ids = [...new Set((publicIds || []).filter((id) => typeof id === 'string' && id.length > 0))];
+  const results = [];
+  for (const publicId of ids) {
+    try {
+      const outcome = decision === 'approve'
+        ? await approveChange(publicId, adminUser, comment, ctx)
+        : await rejectChange(publicId, adminUser, comment, ctx);
+      results.push({ publicId, ok: true, status: outcome.changeRequest.status });
+    } catch (err) {
+      results.push({
+        publicId,
+        ok: false,
+        code: err.code || 'DECISION_FAILED',
+        message: err.message || 'Could not process this request',
+      });
+    }
+  }
+  return {
+    decision,
+    total: results.length,
+    succeeded: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    results,
+  };
+}
+
 export async function cancelChange(publicId, adminUser, reasonOrCtx, ctxMaybe) {
   // Signature is (publicId, adminUser, reason, ctx); tolerate the legacy
   // 3-arg call (publicId, adminUser, ctx) so older callers keep working.

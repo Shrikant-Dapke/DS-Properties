@@ -2,13 +2,14 @@ import {
   listChangeRequestsForApi,
   approveChange,
   rejectChange,
+  bulkDecide,
   cancelChange,
   viewerDecisionState,
 } from '../services/governanceService.js';
 import { getChangeRequestByPublicId } from '../models/changeRequestModel.js';
 import { parsePage, parseLimit, offset, buildPagination } from '../utils/pagination.js';
 import { buildContext } from './context.js';
-import { validateDecision, validateCancel } from '../validators/governanceValidators.js';
+import { validateDecision, validateCancel, validateBulkDecision } from '../validators/governanceValidators.js';
 import { NotFoundError } from '../utils/errors.js';
 
 export async function listChangeRequests(req, res) {
@@ -45,6 +46,20 @@ export async function rejectChangeHandler(req, res) {
   const ctx = buildContext(req);
   const { comment } = validateDecision(req.body);
   const result = await rejectChange(req.params.id, req.user, comment, ctx);
+  res.json({ success: true, data: result });
+}
+
+export async function bulkApproveHandler(req, res) {
+  const ctx = buildContext(req);
+  const { publicIds, comment } = validateBulkDecision(req.body);
+  const result = await bulkDecide({ publicIds, decision: 'approve', comment, adminUser: req.user, ctx });
+  res.json({ success: true, data: result });
+}
+
+export async function bulkRejectHandler(req, res) {
+  const ctx = buildContext(req);
+  const { publicIds, comment } = validateBulkDecision(req.body);
+  const result = await bulkDecide({ publicIds, decision: 'reject', comment, adminUser: req.user, ctx });
   res.json({ success: true, data: result });
 }
 

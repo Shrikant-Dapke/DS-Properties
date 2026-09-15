@@ -8,5 +8,7 @@ export const changeRequestApi = {
   get: (publicId) => get(`/change-requests/${publicId}`),
   approve: (publicId, comment) => post(`/change-requests/${publicId}/approve`, { comment }),
   reject: (publicId, comment) => post(`/change-requests/${publicId}/reject`, { comment }),
+  bulkApprove: (publicIds) => post('/change-requests/bulk-approve', { publicIds }),
+  bulkReject: (publicIds) => post('/change-requests/bulk-reject', { publicIds }),
   cancel: (publicId) => post(`/change-requests/${publicId}/cancel`, {}),
 };
