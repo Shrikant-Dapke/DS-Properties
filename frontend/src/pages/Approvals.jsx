@@ -104,7 +104,14 @@ export default function Approvals() {
   const isRequiredApprover = (r) =>
     (r.requiredApprovers || []).map(String).includes(String(user?.id));
 
-  const isRequester = (r) => String(r.requestedBy) === String(user?.id);
+  // Requester attribution is SERVER-DERIVED (viewerIsRequester, computed from
+  // the persisted requested_by and the authenticated token identity — the
+  // same inputs as viewerCanDecide). The legacy client-side id comparison is
+  // only a fallback for rows predating the flag, so a stale cached user
+  // object can never mislabel a request as yours nor hide that it is.
+  const isRequester = (r) =>
+    r.viewerIsRequester === true
+    || (r.viewerIsRequester === undefined && String(r.requestedBy) === String(user?.id));
 
   // Approval eligibility comes from SERVER-SUPPLIED authorization state
   // (viewerCanDecide), never from role inference: only a member of the
@@ -114,6 +121,16 @@ export default function Approvals() {
     r.status === 'PENDING'
     && (r.viewerCanDecide === true || (r.viewerCanDecide === undefined && isRequiredApprover(r)))
     && !myDecision[r.publicId];
+
+  // Requester display only (no authorization effect): prefer the username
+  // resolved through the existing user directory, so a resolvable requester
+  // is never shown as "#<id>". Fall back to the stable "#id" identifier
+  // when the requester is not in the directory, and to an em-dash when the
+  // request carries no requester id at all (requested_by is nullable).
+  const requesterName = (r) => {
+    if (r?.requestedBy === null || r?.requestedBy === undefined || r?.requestedBy === '') return '—';
+    return userMap[r.requestedBy] || `#${r.requestedBy}`;
+  };
 
   const openDecide = (row, decision) => {
     setDeciding({ row, decision });
@@ -157,7 +174,7 @@ export default function Approvals() {
     {
       key: 'requester',
       label: t('approvals.requester'),
-      render: (r) => userMap[r.requestedBy] || `#${r.requestedBy}`,
+      render: (r) => requesterName(r),
     },
     {
       key: 'progress',
@@ -276,7 +293,7 @@ export default function Approvals() {
               <div>
                 <p className="text-slate-500">{t('approvals.requester')}</p>
                 <p className="font-medium text-slate-800">
-                  {userMap[detail.requestedBy] || `#${detail.requestedBy}`}
+                  {requesterName(detail)}
                 </p>
               </div>
             </div>

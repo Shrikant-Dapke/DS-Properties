@@ -17,6 +17,10 @@ import { logAudit } from './auditService.js';
 
 function serialize(user, partnerRefs) {
   return {
+    // Numeric internal id: required by clients to resolve requester/approver
+    // identity references (change requests already expose these ids to the
+    // same roles, so this reveals nothing new).
+    id: user.id,
     publicId: user.public_id,
     username: user.username,
     fullName: user.full_name,

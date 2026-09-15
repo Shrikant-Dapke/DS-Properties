@@ -755,6 +755,12 @@ export function viewerDecisionState(request, viewerId) {
   return {
     viewerCanDecide: request.status === 'PENDING' && inSnapshot && !mine,
     viewerDecision: mine ? mine.status : null,
+    // Server-derived requester flag, computed from the persisted requested_by
+    // and the authenticated token identity — the same inputs as
+    // viewerCanDecide above. The UI renders its "your request" label from
+    // this (never from a locally cached user object), so the label and the
+    // decision buttons can never disagree about who is viewing.
+    viewerIsRequester: String(request.requestedBy ?? '') === id && id !== '',
   };
 }
 

@@ -24,6 +24,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 import { changeRequestApi } from '../api/changeRequestApi.js';
+import { userApi } from '../api/endpoints.js';
 import { useAuth } from '../hooks/useAuth.js';
 
 function crRow(overrides = {}) {
@@ -137,5 +138,27 @@ describe('Approvals decision visibility (server-derived)', () => {
     expect(within(adminRow).getByRole('button', { name: /common.details/i })).toBeInTheDocument();
     expect(within(adminRow).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
     expect(within(adminRow).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
+  });
+
+  it('server-driven requester flag marks the requester row even with a mismatched cached user', async () => {
+    // The label follows the server flag, not the locally cached user id: a
+    // stale/incorrect local identity can never mislabel or leak controls.
+    changeRequestApi.list.mockResolvedValue({
+      rows: [crRow({ viewerIsRequester: true, viewerCanDecide: false })],
+      pagination: {},
+    });
+    renderAs({ id: 99, username: 'someone-else', role: 'partner' });
+    const row = (await screen.findByText('#3')).closest('tr');
+    expect(screen.getByText('approvals.yourRequest')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /approvals.approve/i })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /approvals.reject/i })).not.toBeInTheDocument();
+  });
+
+  it('requester and approver names resolve from the user directory', async () => {
+    userApi.list.mockResolvedValue({ rows: [{ id: 3, username: 'dattatraya' }] });
+    changeRequestApi.list.mockResolvedValue({ rows: [crRow()], pagination: {} });
+    renderAs({ id: 9, username: 'stranger', role: 'partner' });
+    const row = (await screen.findByText('dattatraya')).closest('tr');
+    expect(within(row).queryByText('#3')).not.toBeInTheDocument();
   });
 });

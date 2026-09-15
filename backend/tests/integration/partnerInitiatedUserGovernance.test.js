@@ -288,4 +288,41 @@ describe('Partner-initiated user approval flow (partners govern partners)', () =
     expect(res.body.data.changeRequest).toBeNull();
     expect(res.body.data.entity.username).toBeTruthy();
   });
+
+  // Identity flags: every viewer gets server-derived requester/decision
+  // state, and the user directory exposes the numeric id needed to resolve
+  // requester names (no more perpetual "#id" fallbacks).
+  it('L: rows carry viewerIsRequester per viewer; directory exposes ids', async () => {
+    const prop = await proposeAdminCreation(A.accessToken, uniq('idflags').toLowerCase());
+    const crId = prop.body.data.changeRequest.publicId;
+    const aId = String(await userIdByUsername(A.username));
+
+    const asA = await request(app).get(`/api/v1/change-requests/${crId}`).set(authHeader(A.accessToken));
+    expect(String(asA.body.data.requestedBy)).toBe(aId);
+    expect(asA.body.data.viewerIsRequester).toBe(true);
+    expect(asA.body.data.viewerCanDecide).toBe(false);
+
+    const asB = await request(app).get(`/api/v1/change-requests/${crId}`).set(authHeader(B.accessToken));
+    expect(asB.body.data.viewerIsRequester).toBe(false);
+    expect(asB.body.data.viewerCanDecide).toBe(true);
+
+    const asAdmin = await request(app).get(`/api/v1/change-requests/${crId}`).set(authHeader(adminToken));
+    expect(asAdmin.body.data.viewerIsRequester).toBe(false);
+    expect(asAdmin.body.data.viewerCanDecide).toBe(false);
+
+    const list = await request(app)
+      .get('/api/v1/change-requests')
+      .query({ status: 'PENDING', entityType: 'user' })
+      .set(authHeader(B.accessToken));
+    const row = list.body.data.rows.find((r) => r.publicId === crId);
+    expect(row.viewerIsRequester).toBe(false);
+    expect(row.viewerCanDecide).toBe(true);
+
+    const users = await request(app)
+      .get('/api/v1/users')
+      .query({ search: A.username, limit: 5 })
+      .set(authHeader(adminToken));
+    const me = users.body.data.rows.find((u) => u.username === A.username);
+    expect(String(me.id)).toBe(aId);
+  });
 });
